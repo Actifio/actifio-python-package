@@ -7,8 +7,11 @@ import urllib3
 import sys
 import json
 from functools import wraps
-from actexceptions import *
 
+if sys.version [:3] == "2.7":
+  import actexceptions
+elif sys.version[0] == "3":
+  import Actifio.actexceptions
 
 # Import urlencode for the correct version
 if sys.version [:3] == "2.7":

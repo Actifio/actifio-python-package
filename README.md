@@ -1,11 +1,28 @@
 # actifio-python-package
 
-This is a python package handle Actifio RestAPI. 
+This is a python package handle Actifio RestAPI. Package wraps around the Rest API to facilitate for UDS and SARG commands. Package also provides functionality for higher functions.
+
+# Current Implemented Methods
+
+| Method name | Description | Arguments 
+|---|---|---
+| run_uds_command | Run UDS command, for info and task command realms | CmdType: Command Type
+takes either ```info``` or ```task``` as options (string)
+cmdUDS: UDS command, as you would use in the CLI.
+
 
 # How to use?
 
+Ypu can install using PyPi:
+
+```
+pip install Actifio
+```
+
+
 ```
 from Actifio import Actifio
+
 
 act = Actifio('MyActifioAppliance','admin','password','xxxx-xxxx-xxxx-xxxx')
 
