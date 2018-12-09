@@ -7,8 +7,8 @@ This is a python package handle Actifio RestAPI. Package wraps around the Rest A
 | Method name | Description | Arguments 
 |---|---|---
 | run_uds_command | Run UDS command, for info and task command realms | CmdType: Command Type
-takes either ```info``` or ```task``` as options (string)
-cmdUDS: UDS command, as you would use in the CLI.
+||| takes either ```info``` or ```task``` as options (string)
+||| cmdUDS: UDS command, as you would use in the CLI.
 
 
 # How to use?
