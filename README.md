@@ -4,12 +4,25 @@ This is a python package handle Actifio RestAPI. Package wraps around the Rest A
 
 # Current Implemented Methods
 
-| Method name | Description | Arguments 
-|---|---|---
-| run_uds_command | Run UDS command, for info and task command realms | CmdType: Command Type
-||| takes either ```info``` or ```task``` as options (string)
-||| cmdUDS: UDS command, as you would use in the CLI.
 
+## run_uds_command 
+
+Run UDS command, for udsinfo and udstask commands. 
+  *CmdType* : Command Type takes either ```info``` or ```task``` as options (string)
+  *cmdUDS*  : UDS command, as you would use in the CLI.
+  *cmdArgs* : Arguments for the UDS command. This option takes arguments as a dictionary.
+               For example: 
+               vmdiscovery -discovercluster -host 1234 
+               { 'discovercluster': None, 'host': 1234 }
+
+               lsapplication -filtervalues "appname=mydb&hostname=myhost"
+               { 'filtervalues': { 'appname': 'mydb', 'hostname': 'myhost' } }
+
+               lshost 123
+               { 'argument': 123 }
+
+               RESTfulAPI_*.pdf would be good referecne point for the __SIMILARITY__ and 
+               __PATTERN__.
 
 # How to use?
 
