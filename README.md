@@ -14,7 +14,8 @@ Run UDS command, for udsinfo and udstask commands.
   **cmdUDS**  : UDS command, as you would use in the CLI.
 
   **cmdArgs** : Arguments for the UDS command. This option takes arguments as a dictionary.
-               For example: 
+               For example:
+               
                vmdiscovery -discovercluster -host 1234 
                { 'discovercluster': None, 'host': 1234 }
 
