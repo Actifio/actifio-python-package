@@ -8,9 +8,12 @@ This is a python package handle Actifio RestAPI. Package wraps around the Rest A
 ## run_uds_command 
 
 Run UDS command, for udsinfo and udstask commands. 
-  *CmdType* : Command Type takes either ```info``` or ```task``` as options (string)
-  *cmdUDS*  : UDS command, as you would use in the CLI.
-  *cmdArgs* : Arguments for the UDS command. This option takes arguments as a dictionary.
+
+  **CmdType** : Command Type takes either ```info``` or ```task``` as options (string)
+
+  **cmdUDS**  : UDS command, as you would use in the CLI.
+
+  **cmdArgs** : Arguments for the UDS command. This option takes arguments as a dictionary.
                For example: 
                vmdiscovery -discovercluster -host 1234 
                { 'discovercluster': None, 'host': 1234 }
