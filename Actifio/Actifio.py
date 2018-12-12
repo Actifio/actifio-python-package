@@ -179,7 +179,7 @@ class Actifio:
       elif cmdArgs[key] == None:
         _URI += key + '&'
       else:
-        _URI += key + '=' + cmdArgs[key] + '&'
+        _URI += key + '=' + str(cmdArgs[key]) + '&'
         
     _URI += 'sessionid=' + Actifio._sessionid[self.appliance]
   
@@ -225,7 +225,7 @@ class Actifio:
       elif cmdArgs[key] == None:
         _URI += key + '&'      
       else:
-        _URI += key + '=' + cmdArgs[key] + '&'
+        _URI += key + '=' + str(cmdArgs[key]) + '&'
         
     _URI += 'sessionid=' + Actifio._sessionid[self.appliance]
 
