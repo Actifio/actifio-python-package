@@ -5,7 +5,7 @@ This is a python package handle Actifio RestAPI. Package wraps around the Rest A
 # Current Implemented Methods
 
 
-## run_uds_command 
+## Actifio.run_uds_command(cmdType, cmdUDS, cmdArgs) 
 
 Run UDS command, for udsinfo and udstask commands. 
 
@@ -15,7 +15,7 @@ Run UDS command, for udsinfo and udstask commands.
 
   **cmdArgs** : Arguments for the UDS command. This option takes arguments as a dictionary.
                For example:
-               
+
                vmdiscovery -discovercluster -host 1234 
                { 'discovercluster': None, 'host': 1234 }
 
@@ -27,6 +27,26 @@ Run UDS command, for udsinfo and udstask commands.
 
                RESTfulAPI_*.pdf would be good referecne point for the __SIMILARITY__ and 
                __PATTERN__.
+
+### Return
+
+This method will return the output of the command in dictionary. 
+
+### Example: 
+
+```
+try: 
+  udsout = act.run_uds_command('info','lshost', { "filtervalue": { "hostname": "orademodb"} })
+except Exception as e:
+  print(e)
+else:
+  print(udsout['result'][0]['id'])
+```
+
+## Actifio.run_sarg_command() 
+
+Run report commands for SARG. 
+
 
 # How to use?
 
