@@ -1,2 +1,4 @@
-class ActifioOutputFormattin():
-  
+from functools import wraps
+
+class ActFormatter():
+  pass
