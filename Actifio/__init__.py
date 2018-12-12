@@ -5,6 +5,4 @@ if sys.version [:3] == "2.7":
 elif sys.version[0] == "3":
   from .Actifio import Actifio 
 
-print(type(Actifio))
-
 __all__ = ['Actifio']
