@@ -1,6 +1,11 @@
 from functools import wraps
 
 class ActFormatter():
+
+  @classmethod
+  def default_format(cls, dict_input):
+    return dict_input
+
   _formatter = default_format
 
   @classmethod
@@ -51,4 +56,3 @@ class ActFormatter():
     
     return output
 
-  
