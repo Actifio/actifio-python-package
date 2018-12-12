@@ -4,10 +4,11 @@ class ActFormatter():
   _formatter = default_format
 
   @classmethod
-  def decorate (cls, formatter_func):
-    @wraps(decorator_func)
-    def 
-
+  def decorate (cls, formatter_func, **kwargs):
+    @wraps(formatter_func)
+    def wprapper_func():
+      return ActFormatter._formatter(formatter_func(**kwargs))
+    return wprapper_func
 
   @classmethod
   def default_format(cls, dict_input):

@@ -17,13 +17,13 @@ Run UDS command, for udsinfo and udstask commands.
                For example:
 
                vmdiscovery -discovercluster -host 1234 
-               { 'discovercluster': None, 'host': 1234 }
+               { 'discovercluster': None, 'host': "1234" }
 
                lsapplication -filtervalues "appname=mydb&hostname=myhost"
                { 'filtervalues': { 'appname': 'mydb', 'hostname': 'myhost' } }
 
                lshost 123
-               { 'argument': 123 }
+               { 'argument': "123" }
 
                RESTfulAPI_*.pdf would be good referecne point for the __SIMILARITY__ and 
                __PATTERN__.
@@ -31,6 +31,8 @@ Run UDS command, for udsinfo and udstask commands.
 ### Return
 
 This method will return the output of the command in dictionary. 
+
+  **cmdSARG** : SARG Command 
 
 ### Example: 
 
@@ -50,7 +52,7 @@ Run report commands for SARG.
 
 # How to use?
 
-Ypu can install using PyPi:
+You can install using PyPi:
 
 ```
 pip install Actifio
