@@ -36,7 +36,7 @@ class ActEnforce():
   def needs_token(cls,act_func):
     @wraps(act_func)
     def decorated(cls, *args, **kwargs):
-      if Actifio._sessionid[cls.appliance] == '':
+      if Actifio._sessionid[cls.appliance][cls.username] == '':
         try:
           Actifio._create_session(cls)
         except:
@@ -47,13 +47,14 @@ class ActEnforce():
         try:
           if not Actifio._validate_token(cls):
             try:
+              print ("creating session id")
               Actifio._create_session(cls)
             except:
               raise
             try:
               result = act_func(cls,*args, **kwargs)
             except:
-              # print(act_func.__name__ + "failed")
+              print(act_func.__name__ + "failed")
               raise
             else:
               return result
@@ -77,7 +78,9 @@ class Actifio:
     self._apiBase = "/actifio/api"
     self.appliance = appliance
     self.username = username
-    Actifio._sessionid.update( { appliance: '' } )
+    #sessionid is unique per user in an appliance
+    Actifio._sessionid.update( { appliance: {} } )
+    Actifio._sessionid[appliance].update( { username: ''} )
     # compose the login params
     self._loginParams = "/login?name=" + username 
     self._loginParams += "&password=" + password
@@ -105,12 +108,12 @@ class Actifio:
     Validate the exisiting _sessionid token. Return True if the token is valid.
     """
     
-    if Actifio._sessionid[self.appliance] == '' :
+    if Actifio._sessionid[self.appliance][self.username] == '' :
       return False
     try:
       resp = self._httppool.request (
         'GET',
-        self._infoURI + 'lsversion?sessionid=' + Actifio._sessionid[self.appliance]
+        self._infoURI + 'lsversion?sessionid=' + Actifio._sessionid[self.appliance][self.username]
       )
     except Exception:
       raise ActConnectError("Unable to reach the appliance: check the IP address / hostname")
@@ -140,7 +143,7 @@ class Actifio:
         raise ActLoginError("This does not seem to be a Actifio Sky/CDS appliance")
       if login.status == 200:
         try:
-          Actifio._sessionid[self.appliance] = response['sessionid']
+          Actifio._sessionid[self.appliance][self.username] = response['sessionid']
         except:
           raise ActLoginError(response['errormessage'])
       else:
@@ -184,7 +187,7 @@ class Actifio:
       else:
         _URI += urlencode_str(key) + '=' + urlencode_str(str(cmdArgs[key])) + '&'
         
-    _URI += 'sessionid=' + Actifio._sessionid[self.appliance]
+    _URI += 'sessionid=' + Actifio._sessionid[self.appliance][self.username]
     try:
       udsout = self._httppool.request (
         'GET' if cmdType == 'info' else 'POST',
@@ -229,7 +232,7 @@ class Actifio:
       else:
         _URI += urlencode_str(key) + '=' + urlencode_str(str(cmdArgs[key])) + '&'
         
-    _URI += 'sessionid=' + Actifio._sessionid[self.appliance]
+    _URI += 'sessionid=' + Actifio._sessionid[self.appliance][self.username]
     try:
       sargout = self._httppool.request (
         'GET',
