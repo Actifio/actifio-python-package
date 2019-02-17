@@ -13,3 +13,7 @@ class ActConnectError (Exception):
 class ActAPIError (Exception):
   def __init__(self, msg):
     Exception.__init__(self, "Actifio API Error: " + str(msg))
+
+class ActUserError (Exception):
+  def __init__(self, msg):
+    Exception.__init__(self, "Actifio User Error: " + str(msg))

@@ -7,13 +7,14 @@ import urllib3
 import sys
 import json
 from functools import wraps
-from ActHosts import ActHosts
 
-# import custom exceptions 
+# import auxialary libraries 
 if sys.version [:3] == "2.7":
   from actexceptions import *
+  from ActSupportClasses import ActHost, ActHostCollection, ActApplication, ActAppCollection, ActImage, ActImageCollection, ActJob, ActJobsCollection
 elif sys.version[0] == "3":
   from Actifio.actexceptions import *
+  from Actifio.ActSupportClasses import ActHost, ActHostCollection, ActApplication, ActAppCollection, ActImage, ActImageCollection, ActJob, ActJobsCollection
 
 # Import urlencode for the correct version
 if sys.version [:3] == "2.7":
@@ -97,10 +98,10 @@ class Actifio:
     self._httppool = urllib3.HTTPSConnectionPool (host=appliance, port=443, cert_reqs=cert_str)
 
   def __str__(self):
-    if Actifio._sessionid[self.appliance] == "":
+    if Actifio._sessionid[self.appliance][self.username] == "":
       return "Connection not verified; Appliance: " + str(self.appliance) + "; Username: " + str(self.username)
     else:
-      return "Connection verified (session id): " + str(Actifio._sessionid[self.appliance]) + "; Appliance: " + str(self.appliance) + "; Username: " + str(self.username)
+      return "Connection verified (session id): " + str(Actifio._sessionid[self.appliance][self.username]) + "; Appliance: " + str(self.appliance) + "; Username: " + str(self.username)
 
   @staticmethod
   def _validate_token (self):
@@ -152,7 +153,9 @@ class Actifio:
 
 
   @ActEnforce.needs_token
-  def run_uds_command(self, cmdType, cmdUDS, cmdArgs={}):
+  def run_uds_command(self, cmdType, 
+    cmdUDS, 
+    cmdArgs={}):
     """
     Wrapper function to convert CLI commands to the rest API.
       cmdType: info / task 
@@ -250,18 +253,223 @@ class Actifio:
         return self._lastout
 
   
-  def define_iscsi_host(self, hostname, ipaddress, host_type='geenric', dsik_pref='BLOCK', detect_as_vm=False):
-    #check whether the host entry exists
+  # def define_iscsi_host(self, hostname, ipaddress, host_type='geenric', dsik_pref='BLOCK', detect_as_vm=False):
+  #   #check whether the host entry exists
+  #   try:
+  #     lshost = self.run_uds_command('info', 'lshost',{ 'filtervalue': { 'hostname': hostname }})
+  #   except:
+  #     raise
+  #   else:
+  #     if len(lshost['result']) > 0:
+  #       #found the host:
+  #       host = lshost['result']
+  #     else:
+  #       self.run_uds_command('task','chhost',{ 'hostname': name})
+
+
+  def get_hosts (self, **kwargs):
+    '''
+    Supported filter parameters are:
+
+    *  alternateip
+      IP address which is not the primary Ip address
+
+    *  diskpref
+      Valid options are: BLOCK / NFS
+
+    *  friendlypath
+      Friendly path of the host
+
+    *  hasagent
+      Hosts with agent istalled
+
+    *  hostname
+      Host name, as defined in Actifio
+
+    *  hosttype
+      Host type, accepted options:  generic | hmc | hpux | hyperv | isilon | netapp 7 mode | 
+      netapp svm | openvms | tpgs | vcenter
+
+    *  ipaddress
+      IP dddress of the host name. This is the main IP. Check alternateip option for the alternate IP addresses.
+
+    *  isvm
+      If set to true, will retrun hosts defined as VMs.
+
+    *  isesxhost
+    *  isvcenterhost
+    *  originalhostid
+    *  osrelease
+    *  osversion
+    *  sourcecluster
+    *  svcname
+    *  uniquename
+    *  vcenterhostid
+    *  isclusterhost
+
+    '''
     try:
-      lshost = self.run_uds_command('info', 'lshost',{ 'filtervalue': { 'hostname': hostname }})
+      if len(kwargs) > 0:
+        lshost_out = self.run_uds_command('info', 'lshost',{ 'filtervalue': kwargs })
+      else:
+        lshost_out = self.run_uds_command('info', 'lshost',{})
     except:
       raise
     else:
-      if len(lshost['result']) > 0:
-        #found the host:
-        host = lshost['result']
+      return ActHostCollection (self, lshost_out['result'])
+
+
+
+  def get_applications (self, **kwargs):
+    '''
+    Supported filter parameters are:
+
+    *  appname
+      Application name
+
+    *  apptype
+      Application Type
+
+    *  appversion
+    *  auxinfo
+    *  description
+    *  friendlytype
+    *  hostid
+      Source HostID
+
+    *  hostname
+      Source Hostname
+
+    *  id
+      Application ID
+
+    *  ignore
+    *  isclustered
+    *  networkip
+    *  networkname
+    *  originalappid
+    *  pathname
+    *  protectable    [ NONE | FULLY | PARTIALLY ]
+    *  sourcecluster
+
+    '''
+    try:
+      if len(kwargs) > 0:
+        lsapplication_out = self.run_uds_command('info', 'lsapplication',{ 'filtervalue': kwargs })
       else:
-        self.run_uds_command('task','chhost',{ 'hostname': name})
+        lsapplication_out = self.run_uds_command('info', 'lsapplication',{ })
+    except:
+      raise
+    else:
+      return ActAppCollection (self, lsapplication_out['result'])
+
+
+  def get_images(self, restoretime = "", strict_policy=True, **kwargs):
+    '''
+    Supported filtervalues are:
+
+    *  appid
+      Application ID
+
+    *  appname
+      Application Name
+
+    *  apptype
+      Application type
+
+    *  backupname
+      Image Name
+
+    *  characteristic    [ PRIMARY | MOUNT | UNMOUNT ]
+    *  consistencydate
+      Backup consistency date
+
+    *  expiration
+    *  hostid
+    *  hostname
+      Source Hostname
+
+    *  jobclass          [ snapshot | dedup | dedupasync | liveclone | syncback ]
+    *  label
+      Backu label
+
+    *  mappedhost
+    *  mountedhost
+    *  policyname
+    *  prepdate
+    *  slpname
+    *  sltname
+    *  sourceimage
+    *  sourceuds
+    *  targetuds
+    *  virtualsize
+
+    '''
+    try:
+      if len(kwargs) > 0:
+        lsbackup_out = self.run_uds_command('info', 'lsbackup',{ 'filtervalue': kwargs })
+      else:
+        lsbackup_out = self.run_uds_command('info', 'lsbackup',{ })
+    except:
+      raise
+
+    if restoretime == "":
+      return ActImageCollection (self, lsbackup_out['result'])
+    else:
+      from datetime import datetime
+      timeformat = "%Y-%m-%d %H:%M:%S"
+      if isinstance(restoretime, str):
+        try:
+          recoverytime = datetime.strptime (restoretime, timeformat)
+        except:
+          raise ActUserError ('Incorrect format for restoretime, should be in the format of: 2019-02-15 11:12:00')
+      elif isinstance(restoretime, datetime):
+        recoverytime = restoretime
+      else:
+        raise ActUserError ("restoretime need to be in type of [str|datetime]. Provided:" +str(type(retstoretime)))
+
+      
+    
+      
+  
+
+  def get_jobs(self, restoretime = "", **kwargs):
+    '''
+    Supported filtervalues are:
+
+   *  appid
+   *  appname
+   *  component
+   *  enddate
+   *  errorcode
+   *  expirationdate
+   *  hostname
+   *  isscheduled       [ true | false ]
+   *  jobclass          
+   *  jobname
+   *  jobtag
+   *  parentid
+   *  policyname
+   *  priority
+   *  progress
+   *  queuedate
+   *  relativesize
+   *  retrycount
+   *  sltname
+   *  startdate
+   *  status            [ running | queued | paused | interrupted | stalled ]
+   *  sourceid
+   *  virtualsize
+
+    '''
+    try:
+      lsjob_out = self.run_uds_command('info', 'lsjob',{ 'filtervalue': kwargs })
+      lsjobhist_out = self.run_uds_command('info', 'lsjobhistory',{ 'filtervalue': kwargs })
+    except:
+      raise
+    else:
+      return ActJobsCollection (self, lsjob_out['result'] + lsjobhist_out['result'])
+
 
   def clone_database(self, source_hostname, source_appname, target_hostname, **kwargs):
     '''
@@ -273,8 +481,8 @@ class Actifio:
       Oracle Related Parameters:
         oracle_home (required): ORACLE_HOME
         oracle_db_name (required): SID of the target clone
-        oracle_tns_admin (optional): TNS admin path
-        oracle_db_mem (optional): Total Memory Target for the database
+        oracle_tns_admin (optional): TNS admin path, defaults to $ORACLE_HOME/network/admin.
+        oracle_db_mem (optional): Total Memory Target for the database, defaults to 512MB.
         oracle_sga_pct (optional): Memory Percentage to allocate for SGA
         oracle_redo_size (optional): Redo Log size in MB, defaults to 500
         oracle_shared_pool (optional): Oracle Shared Pool size
@@ -309,5 +517,13 @@ class Actifio:
 
     '''
 
-    application = self.run_uds_command("info","lsapplication", {"filtervalue": { "appname": source_appname, "hostname": source_hostname, "apptype!": "VMBackup" }})
-    pass
+    try:
+      application = self.run_uds_command("info","lsapplication", {"filtervalue": { "appname": source_appname, "hostname": source_hostname, "apptype!": "VMBackup" }})
+    except Exception as e:
+      raise
+
+    try:
+      target_host = self.run_uds_command('info', 'lshost', { 'filtervalue': {'hostname': str(target_hostname)}} )
+    except ActAPIError as e:
+      raise
+    
