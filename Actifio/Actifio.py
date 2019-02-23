@@ -655,8 +655,8 @@ class Actifio:
       strict_policy = False
     
     # restore time
-    from datetime import datetime
-    timeformat = "%Y-%m-%d %H:%M:%S"
+    # from datetime import datetime
+    # timeformat = "%Y-%m-%d %H:%M:%S"
 
     try:
       source_application = self.get_applications(appname=source_appname,hostname=source_hostname,apptype="not VMBackup")
