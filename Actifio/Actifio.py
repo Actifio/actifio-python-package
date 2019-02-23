@@ -69,10 +69,27 @@ class ActEnforce():
 
 
 class Actifio:
-  #
+  """
+  Actifio instance:
+
+  appliance: IP or FQDN of the appliance
+  username: Username to login to the appliance
+  password: Password
+
+  """
   _sessionid = {}
   
-  def __init__ (self, appliance, username, password, vendorkey="python-wrapper", cert_validation=False):
+  def __init__ (self, appliance, username, password, cert_validation=False):
+    """
+    Actifio instance:
+
+    appliance: IP or FQDN of the appliance
+    username: Username to login to the appliance
+    password: Password
+
+    """
+    # vendor key is fixed
+    vendorkey = "195B-4370-2506-0A60-1F41-5829-067B-603C-6737-1244-0A11-6742-0745-4023-1A"
     # functools need a __name__ for the wraps
     self.__name__ = "Actifio"
     # compose the URI for the API
@@ -180,11 +197,31 @@ class Actifio:
     # append the command to URI
     _URI += cmdUDS + '?'
 
+    # provision for the non-equal opprations
+    def __regex_args (key, value):
+      import re
+      not_equal = re.compile(r'^not\s+(.*)')
+      greater_than = re.compile(r'^\>\s*(.*)')
+      smaler_than = re.compile(r'^\<\s*(.*)')
+      
+      ne_match = not_equal.search(value)
+      gt_match = greater_than.search(value)
+      st_match = smaler_than.search(value)
+
+      if ne_match is not None:
+        return key + "!=" + ne_match.group(1)
+      elif st_match is not None:
+        return key + "<" + st_match.group(1)
+      elif gt_match is not None:
+        return key + ">" + gt_match.group(1)
+      else:
+        return key + "=" + value
+
     # append the argument
     for key in cmdArgs:
       if type(cmdArgs[key]) == dict:
         # Actifio API expects this to be urlencoded
-        _URI += key + '=' + urlencode_str('&'.join([ filter_key + '=' + cmdArgs[key][filter_key] for filter_key in cmdArgs[key]])) + '&'
+        _URI += key + '=' + urlencode_str('&'.join([ __regex_args(filter_key, cmdArgs[key][filter_key]) for filter_key in cmdArgs[key]])) + '&'
       elif cmdArgs[key] == None:
         _URI += urlencode_str(key) + '&'
       else:
@@ -195,7 +232,8 @@ class Actifio:
       udsout = self._httppool.request (
         'GET' if cmdType == 'info' else 'POST',
         _URI
-      )  
+      )
+      # print(_URI) 
     except Exception as e:
       print (e)
       raise ActConnectError("Failed to connect the appliance")
@@ -364,7 +402,7 @@ class Actifio:
       return ActAppCollection (self, lsapplication_out['result'])
 
 
-  def get_images(self, restoretime = "", strict_policy=True, **kwargs):
+  def get_images(self, **kwargs):
     '''
     Supported filtervalues are:
 
@@ -405,6 +443,7 @@ class Actifio:
     *  virtualsize
 
     '''
+
     try:
       if len(kwargs) > 0:
         lsbackup_out = self.run_uds_command('info', 'lsbackup',{ 'filtervalue': kwargs })
@@ -412,28 +451,117 @@ class Actifio:
         lsbackup_out = self.run_uds_command('info', 'lsbackup',{ })
     except:
       raise
-
-    if restoretime == "":
-      return ActImageCollection (self, lsbackup_out['result'])
     else:
-      from datetime import datetime
-      timeformat = "%Y-%m-%d %H:%M:%S"
+      return ActImageCollection(self, lsbackup_out['result'])
+
+
+  def get_image_bytime(self, ActAppObject, restoretime, strict_policy=False, job_class="snapshot"):
+    """
+    This method return a ActImage object with a single imaage to the specified restore time.
+
+      ActAppObject: should be the application in the form of ActApplication object.
+      strict_policy: [True | False] If set to true, the image will be selected from log recovery range, with                  the closest image to replay the logs on.  
+      restoretime: can be datetime obect or string with the format [YYYY-MM-DD HH:mm:ss]
+      job_class: Defaults to snapshot. Should be string type, to any supported image jobclass.
+    """
+    from datetime import datetime
+    timeformat = "%Y-%m-%d %H:%M:%S"
+
+    try:
       if isinstance(restoretime, str):
-        try:
-          recoverytime = datetime.strptime (restoretime, timeformat)
-        except:
-          raise ActUserError ('Incorrect format for restoretime, should be in the format of: 2019-02-15 11:12:00')
+        if restoretime != "":
+          try:
+            restore_time = datetime.strptime(restoretime, timeformat)
+          except:
+            raise ActUserError("'restoretime' need to be in the format of [YYYY-MM-DD HH:mm:ss]")
       elif isinstance(restoretime, datetime):
-        recoverytime = restoretime
+        restore_time = restoretime
       else:
-        raise ActUserError ("restoretime need to be in type of [str|datetime]. Provided:" +str(type(retstoretime)))
+        raise ActUserError("'restoretime' should be in the type of datetime or string with format of [YYYY-MM-DD HH:mm:ss]")
+    except KeyError:
+      restoretime = ""
 
-      
-    
-      
-  
+    if strict_policy:
+      try:
+        logsmart_images = self.get_images(appid=ActAppObject.id, componenttype="1")
+      except:
+        raise
 
-  def get_jobs(self, restoretime = "", **kwargs):
+      if len(logsmart_images) == 0:
+        raise ActUserError("'strict_policy=True' is only valid for LogSmart enables applications. This application is not LogSmart enabled.")
+      else:
+        ls_image = logsmart_images[0]
+        ls_image.details()
+        try:
+          viable_images = self.get_images(appid=ActAppObject.id, consistencydate=">" + ls_image.beginpit, jobclass=job_class)
+        except:
+          raise
+      
+      prefered_image = None
+      prefered_image_time = None
+
+      for img in viable_images:
+        try:
+          consistency_time = datetime.strptime(img.consistencydate[:-4], timeformat)
+        except:
+          raise
+        if prefered_image is None:
+          if consistency_time < restore_time:
+            prefered_image = img
+            prefered_image_time = consistency_time
+        else:
+          if prefered_image_time < consistency_time < restore_time:
+            prefered_image = img
+            prefered_image_time = consistency_time
+      
+      return prefered_image
+    else:
+      try:
+        app_images = self.get_images(appid=ActAppObject.id, jobclass=job_class)
+      except:
+        raise
+
+      shortest_gap = None
+      prefered_image = None
+      prefered_image_time = None
+
+      for img in app_images:
+        try:
+          consistency_time = datetime.strptime(img.consistencydate[:-4], timeformat)
+        except:
+          raise
+        
+        if prefered_image is None:
+          # print("processing first image")
+          prefered_image = img
+          prefered_image_time = consistency_time
+          # print( str(consistency_time)+ "  -  " + str(restore_time))
+          if consistency_time > restore_time:
+            # print( "consistency time is later than restore time")
+            shortest_gap = consistency_time - restore_time
+          else:
+            shortest_gap = restore_time - consistency_time
+            # print( "restore time is later than consistency ")
+        else:
+          # print("first image is already set")
+          # print( str(consistency_time)+ "  -  " + str(prefered_image_time))
+          if consistency_time > restore_time:
+            # print( "consistency time is later than prefered image time")
+            this_image_gap = consistency_time - restore_time
+          else:
+            # print( "prefered image time is later than consistency ")
+            this_image_gap = restore_time - consistency_time
+
+          if shortest_gap.total_seconds() > this_image_gap.total_seconds():
+            # print("prefered image time is :" + str(consistency_time))
+            prefered_image = img
+            prefered_image_time = consistency_time
+            shortest_gap = this_image_gap
+
+      return prefered_image
+
+
+  def get_jobs(self, **kwargs):
     '''
     Supported filtervalues are:
 
@@ -517,13 +645,29 @@ class Actifio:
 
     '''
 
+    # Strict policy
     try:
-      application = self.run_uds_command("info","lsapplication", {"filtervalue": { "appname": source_appname, "hostname": source_hostname, "apptype!": "VMBackup" }})
+      if isinstance(kwargs['strict_policy'], bool):
+        strict_policy = kwargs['strict_policy']
+      else:
+        raise ActUserError("'strict_policy' should be boolean")
+    except KeyError:
+      strict_policy = False
+    
+    # restore time
+    from datetime import datetime
+    timeformat = "%Y-%m-%d %H:%M:%S"
+
+    try:
+      source_application = self.get_applications(appname=source_appname,hostname=source_hostname,apptype="not VMBackup")
     except Exception as e:
       raise
 
+    if len(source_application) < 1:
+      raise ActUserError("Unable to find the 'source_application' application: " + source_application)
+
     try:
-      target_host = self.run_uds_command('info', 'lshost', { 'filtervalue': {'hostname': str(target_hostname)}} )
+      target_host = self.get_hosts(hostname=target_hostname)
     except ActAPIError as e:
       raise
-    
+
