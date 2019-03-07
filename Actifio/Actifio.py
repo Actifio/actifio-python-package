@@ -48,14 +48,14 @@ class ActEnforce():
         try:
           if not Actifio._validate_token(cls):
             try:
-              print ("creating session id")
+              # print ("creating session id")
               Actifio._create_session(cls)
             except:
               raise
             try:
               result = act_func(cls,*args, **kwargs)
             except:
-              print(act_func.__name__ + "failed")
+              # print(act_func.__name__ + "failed")
               raise
             else:
               return result
@@ -210,9 +210,10 @@ class Actifio:
 
       if ne_match is not None:
         return key + "!=" + ne_match.group(1)
-      elif st_match is not None:
-        return key + "<" + st_match.group(1)
-      elif gt_match is not None:
+      if st_match is not None:
+        if key != "provisioningoptions":
+          return key + "<" + st_match.group(1)
+      if gt_match is not None:
         return key + ">" + gt_match.group(1)
       else:
         return key + "=" + value
@@ -235,7 +236,7 @@ class Actifio:
       )
       # print(_URI) 
     except Exception as e:
-      print (e)
+      # print (e)
       raise ActConnectError("Failed to connect the appliance")
     else:
       response = json.loads(udsout.data)
@@ -455,11 +456,11 @@ class Actifio:
       return ActImageCollection(self, lsbackup_out['result'])
 
 
-  def get_image_bytime(self, ActAppObject, restoretime, strict_policy=False, job_class="snapshot"):
+  def get_image_bytime(self, application, restoretime, strict_policy=False, job_class="snapshot"):
     """
     This method return a ActImage object with a single imaage to the specified restore time.
 
-      ActAppObject: should be the application in the form of ActApplication object.
+      application: should be the application in the form of ActApplication object.
       strict_policy: [True | False] If set to true, the image will be selected from log recovery range, with                  the closest image to replay the logs on.  
       restoretime: can be datetime obect or string with the format [YYYY-MM-DD HH:mm:ss]
       job_class: Defaults to snapshot. Should be string type, to any supported image jobclass.
@@ -467,23 +468,22 @@ class Actifio:
     from datetime import datetime
     timeformat = "%Y-%m-%d %H:%M:%S"
 
-    try:
-      if isinstance(restoretime, str):
-        if restoretime != "":
-          try:
-            restore_time = datetime.strptime(restoretime, timeformat)
-          except:
-            raise ActUserError("'restoretime' need to be in the format of [YYYY-MM-DD HH:mm:ss]")
-      elif isinstance(restoretime, datetime):
-        restore_time = restoretime
+    if isinstance(restoretime, str):
+      if restoretime != "":
+        try:
+          restore_time = datetime.strptime(restoretime, timeformat)
+        except:
+          raise ActUserError("'restoretime' need to be in the format of [YYYY-MM-DD HH:mm:ss]")
       else:
         raise ActUserError("'restoretime' should be in the type of datetime or string with format of [YYYY-MM-DD HH:mm:ss]")
-    except KeyError:
-      restoretime = ""
+    elif isinstance(restoretime, datetime):
+      restore_time = restoretime
+    else:
+      raise ActUserError("'restoretime' should be in the type of datetime or string with format of [YYYY-MM-DD HH:mm:ss]")
 
     if strict_policy:
       try:
-        logsmart_images = self.get_images(appid=ActAppObject.id, componenttype="1")
+        logsmart_images = self.get_images(appid=application.id, componenttype="1")
       except:
         raise
 
@@ -493,7 +493,7 @@ class Actifio:
         ls_image = logsmart_images[0]
         ls_image.details()
         try:
-          viable_images = self.get_images(appid=ActAppObject.id, consistencydate=">" + ls_image.beginpit, jobclass=job_class)
+          viable_images = self.get_images(appid=application.id, consistencydate=">" + ls_image.beginpit, jobclass=job_class)
         except:
           raise
       
@@ -517,7 +517,7 @@ class Actifio:
       return prefered_image
     else:
       try:
-        app_images = self.get_images(appid=ActAppObject.id, jobclass=job_class)
+        app_images = self.get_images(appid=application.id, jobclass=job_class)
       except:
         raise
 
@@ -599,16 +599,22 @@ class Actifio:
       return ActJobsCollection (self, lsjob_out['result'] + lsjobhist_out['result'])
 
 
-  def clone_database(self, source_hostname, source_appname, target_hostname, **kwargs):
+  def clone_database(self, source_hostname, source_appname, target_hostname, restoretime="", strict_policy=True, **kwargs):
     '''
     This method creates a virtual clone of Oracle or SQL server database.
       source_hostname: Hostname of the source host where the database was captured from
       source_appname: source application name, or the database name
       target_hostname: target host where the virtual clone need to be created on
 
+      Miscelaneous Parameters
+        restoretime: Point in time the database needs to be recovered to.
+        strict_policy: Defaults to True, If set to True (only for applications with log database backups), databases will be cloned to the time specified. 
+        nowait: defaults to True, if True, this method will be non-blocking mode.
+
       Oracle Related Parameters:
         oracle_home (required): ORACLE_HOME
         oracle_db_name (required): SID of the target clone
+        oracle_user (optional): Defaults to "oracle".
         oracle_tns_admin (optional): TNS admin path, defaults to $ORACLE_HOME/network/admin.
         oracle_db_mem (optional): Total Memory Target for the database, defaults to 512MB.
         oracle_sga_pct (optional): Memory Percentage to allocate for SGA
@@ -643,7 +649,46 @@ class Actifio:
         sql_dbname_prefix (optional): Prefix of database name for multiple database mount
         sql_dbname_suffix (optional): Suffix of database name for multiple database mount
 
+
     '''
+    # parse kwargs 
+
+    kwarg_map = { 
+    'orahome': 'oracle_home',
+    'username': 'oracle_username',
+    'databasesid': 'oracle_db_name',
+    'tnsadmindir': 'oracle_tns_admin',
+    'totalmemory': 'oracle_db_mem',
+    'sgapct': 'oracle_sga_pct',
+    'redosize': 'oracle_redo_size',
+    'shared_pool_size': 'oracle_shared_pool',
+    'db_cache_size': 'oracle_db_cache_size',
+    'db_recovery_file_dest_size': 'oracle_recover_dest_size',
+    'diagnostic_dest': 'oracle_diagnostic_dest',
+    'processes': 'oracle_nprocs',
+    'open_cursors': 'oracle_open_cursors',
+    'characterset': 'oracle_char_set',
+    'tnsip': 'oracle_tns_ip',
+    'tnsport': 'oracle_tns_port',
+    'tnsdomain': 'oracle_tns_domain',
+    'nonid': 'oracle_no_nid',
+    'notnsupdate': 'oracle_no_tns_update',
+    'rrecovery': 'oracle_restore_recov',
+    'standalone': 'oracle_no_rac' }
+      
+    def __parse_kwargs(key):
+      try:
+        if kwargs[kwarg_map[key]] != "":
+          return kwargs[kwarg_map[key]]
+      except KeyError:
+        if key == "username":
+          return "oracle"
+        elif key == "tnsadmindir":
+          return kwargs['oracle_home']+"/network/admin"
+        else:
+          return None
+      except:
+        raise
 
     # Strict policy
     try:
@@ -654,9 +699,20 @@ class Actifio:
     except KeyError:
       strict_policy = False
     
-    # restore time
-    # from datetime import datetime
-    # timeformat = "%Y-%m-%d %H:%M:%S"
+    # restore time validation routines (same as get_image_bytime)
+    from datetime import datetime
+    timeformat = "%Y-%m-%d %H:%M:%S"
+
+    if isinstance(restoretime, str):
+      if restoretime != "":
+        try:
+          restore_time = datetime.strptime(restoretime, timeformat)
+        except:
+          raise ActUserError("'restoretime' need to be in the format of [YYYY-MM-DD HH:mm:ss]")
+    elif isinstance(restoretime, datetime):
+      restore_time = restoretime
+    else:
+      raise ActUserError("'restoretime' should be in the type of datetime or string with format of [YYYY-MM-DD HH:mm:ss]")
 
     try:
       source_application = self.get_applications(appname=source_appname,hostname=source_hostname,apptype="not VMBackup")
@@ -666,8 +722,76 @@ class Actifio:
     if len(source_application) < 1:
       raise ActUserError("Unable to find the 'source_application' application: " + source_application)
 
+    provisioningoptions = ""
+    mountimage_args = {}
+    # if source_application[0].appclass == "Oracle":
+    try:
+      app_parameters = self.run_uds_command("info","lsappclass",{ "name": source_application[0].appclass } )
+    except:
+      raise
+    
+    # print(type(app_parameters))
+    for param in app_parameters['result']:
+      if __parse_kwargs(param['name']) is not None:
+        provisioningoptions += "<" + str(param['name']) + ">" + __parse_kwargs(param['name']) + "</" + str(param['name']) + ">"
+    if source_application[0].appclass == "SQLServerGroup":
+      if __parse_kwargs("sql_source_dbnames") is not None and len(__parse_kwargs("sql_source_dbnames").split(',')) == 1 :
+        provisioningoptions += "<dbname>" + __parse_kwargs("sql_source_dbnames") + "</dbname>"
+
+    provisioningoptions = "<provisioningoptions>" + provisioningoptions + "</provisioningoptions>"
+
+    # print(provisioningoptions)
+    
+    mountimage_args.__setitem__('restoreoption',{ 'provisioningoptions': provisioningoptions })
+
     try:
       target_host = self.get_hosts(hostname=target_hostname)
     except ActAPIError as e:
       raise
+
+    if len(target_host) != 1:
+      raise ActUserError ("Unable to find the specified 'target_hostname': " + target_hostname)
+    
+    mountimage_args.__setitem__('host', target_host[0].id)
+
+    # get the image by recovery time
+
+    if restoretime =="":
+      mountimage_args.__setitem__('appid', source_application[0].id)
+    else:
+      try:
+        mount_image = self.get_image_bytime(source_application[0],restoretime, strict_policy)
+      except:
+        raise
+      else:
+        mountimage_args.__setitem__('image', str(mount_image))
+    
+    # handling no wait
+
+    try:
+      if kwargs['nowait'] != "":
+        kwargs_nowait = kwargs['nowait']
+      else:
+        kwargs_nowait = True
+    except KeyError:
+      kwargs_nowait = True
+
+    if kwargs_nowait:
+      mountimage_args.__setitem__('nowait', None)
+ 
+    # mountimage steps
+    # print (mountimage_args)
+    try:
+      mountimage_out = self.run_uds_command("task", "mountimage", mountimage_args)
+    except:
+      raise
+    else:
+      result_job_name = mountimage_out['result'].split(" ")[0]
+      try:
+        return self.get_jobs(jobname=result_job_name)[0]
+      except:
+        raise
+
+    
+        
 

@@ -147,37 +147,31 @@ class ActJob(ActObject):
     """
     Method to refresh the job details.
     """
-    try:
-      this_job = self.appliance.run_uds_command('info','lsjob',{ "argument": self.get('id')})
-    except:
-      raise
 
-    if len(this_job['result']) == 0:
+    if self.status == 'running' or self.status == 'waiting':
       try:
-        this_job = self.appliance.run_uds_command('info','lsjobhistory',{ "argument": self.get('id') })
+        this_job = self.appliance.run_uds_command('info','lsjob',{ 'filtervalue' : { 'jobname': str(self) } } )
       except:
-        raise
-    else:
-      self.__init__(self.appliance, this_job['result'])
+        pass
+
+      if len(this_job['result']) == 0:
+        try:
+          this_job = self.appliance.run_uds_command(  'info','lsjobhistory',{ 'filtervalue' : { 'jobname': str(self) } } )
+        except:
+          raise
+      
+      self.__init__(self.appliance, this_job['result'][0])
 
 
 class ActJobsCollection(ActObjCollection):
   def __init__(self, appliance, lsjobsalldata):
     return super(ActJobsCollection, self).__init__("jobs", ActJob, appliance, lsjobsalldata)
 
-  # def refresh(self):
-  #   """
-  #   Method to refresh the job details.
-  #   """
-  #   try:
-  #     this_job = self.appliance.run_uds_command('info','lsjob',{ "argument": self.get('id')})
-  #   except:
-  #     raise
+  def refresh(self):
+    """
+    Method to refresh the job details, for each job.
+    """
 
-  #   if len(this_job['result']) == 0:
-  #     try:
-  #       this_job = self.appliance.run_uds_command('info','lsjobhistory',{ "argument": self.get('id') })
-  #     except:
-  #       raise
-  #   else:
-  #     self.__init__(self.appliance, this_job['result'])
+    for job in self:
+      job.refresh()
+
