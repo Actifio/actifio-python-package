@@ -1,6 +1,19 @@
-# actifio-python-package
+# Actifio Python Client Library
 
-This is a python package handle Actifio RestAPI. Package wraps around the Rest API to facilitate for UDS and SARG commands. Package also provides functionality for higher functions.
+This is a python package to handle Actifio RestAPI. Package wraps around the Rest API to facilitate for UDS and SARG functions. Package also provides functionality for higher functions.
+
+# Install
+
+To install, we always recomend to use ```pip```.
+
+```
+pip install Actifio
+```
+
+# Documentation
+
+You can find the documentation here.
+
 
 # Current Implemented Methods
 
@@ -52,11 +65,6 @@ Run report commands for SARG.
 
 # How to use?
 
-You can install using PyPi:
-
-```
-pip install Actifio
-```
 
 
 ```

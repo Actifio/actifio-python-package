@@ -14,6 +14,8 @@ elif sys.version[0] == "3":
 
 ############# Base Class for all ################
 
+__metaclass__ = type
+
 class ActObject ():
   def __init__(self, appliance, objectData, printable, uniqueid):
     """
@@ -32,16 +34,10 @@ class ActObject ():
     return self.printable
 
   def __getattr__(self, name):
-    try:
-      return self.objectdata[name]
-    except KeyError:
-      raise ActUserError ("There is no parameter: " + name)
+    return self.objectdata.get(name)
 
   def get(self, parameter):
-    try:
-      return self.objectdata[parameter]
-    except KeyError:
-      raise ActUserError ("There is no parameter: " + parameter)
+    return self.objectdata.get(parameter)
 
   def refresh (self):
     pass
@@ -92,7 +88,16 @@ class ActObjCollection ():
 
     # python2.7 support
     next = __next__
-  
+
+############# Restoreoptions Related ###############
+
+class ActRestoreoption(ActObject):
+  def __init__(self, appliance, restoptiondata):
+    super(ActRestoreoption, self).__init__(appliance, restoptiondata, restoptiondata['name'], restoptiondata['name'])
+
+class ActRestoreoptionCollection(ActObjCollection):
+  def __init__(self, appliance, lsrestoreoptionsdata):
+    return super(ActRestoreoptionCollection, self).__init__("restoreoptions", ActRestoreoption, appliance, lsrestoreoptionsdata)
 
 ############## Hosts Related ######################
 
@@ -131,7 +136,26 @@ class ActImage(ActObject):
 
   def details(self):
     image_details = self.appliance.run_uds_command("info","lsbackup",{ "argument" : self.id })
-    self.objectdata = image_details['result'] 
+    self.objectdata = image_details['result']
+
+  def restoreoptions (self, action, targethost):
+    """
+    Retrieve restore options for a ActImage for mount / clone / restore operations
+      action (required): operation [ mount, restore , clone ]
+      targethost (required): Host ID of the targethost, ActHost type 
+    """
+    if not isinstance(targethost,ActHost):
+      raise ActUserError("'targethost' needs to be ActHost type")
+
+    if action not in ['mount', 'clone', 'restore']:
+      raise ActUserError("Allowed values for 'action' are mount, clone and restore")
+    
+    restoreops_capabilities = self.appliance.run_uds_command ('info','lsrestoreoptions', { 'applicationtype': self.apptype, 'action': 'mount', 'targethost': targethost.id })
+
+    return ActRestoreoptionCollection(self, restoreops_capabilities['result'])
+
+  def provisioningoptions(self):
+    pass
 
 class ActImageCollection(ActObjCollection):
   def __init__(self, appliance, lsbackupdata):
@@ -160,7 +184,7 @@ class ActJob(ActObject):
         except:
           raise
       
-      self.__init__(self.appliance, this_job['result'][0])
+        self.__init__(self.appliance, this_job['result'][0])
 
 
 class ActJobsCollection(ActObjCollection):
@@ -174,4 +198,3 @@ class ActJobsCollection(ActObjCollection):
 
     for job in self:
       job.refresh()
-

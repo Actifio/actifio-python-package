@@ -141,7 +141,6 @@ class Actifio:
       else:
         return True
 
-
   @staticmethod
   def _create_session (self):
     """
@@ -159,6 +158,7 @@ class Actifio:
         response = json.loads(login.data)
       except:
         raise ActLoginError("This does not seem to be a Actifio Sky/CDS appliance")
+      print (login.status)
       if login.status == 200:
         try:
           Actifio._sessionid[self.appliance][self.username] = response['sessionid']
@@ -166,8 +166,6 @@ class Actifio:
           raise ActLoginError(response['errormessage'])
       else:
         raise ActLoginError("This does not seem to be a Actifio Sky/CDS appliance")
-
-
 
   @ActEnforce.needs_token
   def run_uds_command(self, cmdType, 
@@ -234,7 +232,7 @@ class Actifio:
         'GET' if cmdType == 'info' else 'POST',
         _URI
       )
-      # print(_URI) 
+      print(_URI) 
     except Exception as e:
       # print (e)
       raise ActConnectError("Failed to connect the appliance")
@@ -247,9 +245,8 @@ class Actifio:
         self._lastout = response
         return self._lastout
 
-
   @ActEnforce.needs_token
-  def run_sarg_command(self, cmdSARG, cmdArgs):
+  def run_sarg_command(self, cmdSARG, cmdArgs={}):
     """
     Wrapper function to convert CLI commands to the rest API. 
       cmdSARG: Command to use (eg. reportsnaps, reportapps... etc.)
@@ -290,21 +287,6 @@ class Actifio:
       else:
         self._lastout = response
         return self._lastout
-
-  
-  # def define_iscsi_host(self, hostname, ipaddress, host_type='geenric', dsik_pref='BLOCK', detect_as_vm=False):
-  #   #check whether the host entry exists
-  #   try:
-  #     lshost = self.run_uds_command('info', 'lshost',{ 'filtervalue': { 'hostname': hostname }})
-  #   except:
-  #     raise
-  #   else:
-  #     if len(lshost['result']) > 0:
-  #       #found the host:
-  #       host = lshost['result']
-  #     else:
-  #       self.run_uds_command('task','chhost',{ 'hostname': name})
-
 
   def get_hosts (self, **kwargs):
     '''
@@ -357,8 +339,6 @@ class Actifio:
     else:
       return ActHostCollection (self, lshost_out['result'])
 
-
-
   def get_applications (self, **kwargs):
     '''
     Supported filter parameters are:
@@ -401,7 +381,6 @@ class Actifio:
       raise
     else:
       return ActAppCollection (self, lsapplication_out['result'])
-
 
   def get_images(self, **kwargs):
     '''
@@ -455,6 +434,42 @@ class Actifio:
     else:
       return ActImageCollection(self, lsbackup_out['result'])
 
+  def get_jobs(self, **kwargs):
+    '''
+    Supported filtervalues are:
+
+   *  appid
+   *  appname
+   *  component
+   *  enddate
+   *  errorcode
+   *  expirationdate
+   *  hostname
+   *  isscheduled       [ true | false ]
+   *  jobclass          
+   *  jobname
+   *  jobtag
+   *  parentid
+   *  policyname
+   *  priority
+   *  progress
+   *  queuedate
+   *  relativesize
+   *  retrycount
+   *  sltname
+   *  startdate
+   *  status            [ running | queued | paused | interrupted | stalled ]
+   *  sourceid
+   *  virtualsize
+
+    '''
+    try:
+      lsjob_out = self.run_uds_command('info', 'lsjob',{ 'filtervalue': kwargs })
+      lsjobhist_out = self.run_uds_command('info', 'lsjobhistory',{ 'filtervalue': kwargs })
+    except:
+      raise
+    else:
+      return ActJobsCollection (self, lsjob_out['result'] + lsjobhist_out['result'])
 
   def get_image_bytime(self, application, restoretime, strict_policy=False, job_class="snapshot"):
     """
@@ -559,45 +574,6 @@ class Actifio:
             shortest_gap = this_image_gap
 
       return prefered_image
-
-
-  def get_jobs(self, **kwargs):
-    '''
-    Supported filtervalues are:
-
-   *  appid
-   *  appname
-   *  component
-   *  enddate
-   *  errorcode
-   *  expirationdate
-   *  hostname
-   *  isscheduled       [ true | false ]
-   *  jobclass          
-   *  jobname
-   *  jobtag
-   *  parentid
-   *  policyname
-   *  priority
-   *  progress
-   *  queuedate
-   *  relativesize
-   *  retrycount
-   *  sltname
-   *  startdate
-   *  status            [ running | queued | paused | interrupted | stalled ]
-   *  sourceid
-   *  virtualsize
-
-    '''
-    try:
-      lsjob_out = self.run_uds_command('info', 'lsjob',{ 'filtervalue': kwargs })
-      lsjobhist_out = self.run_uds_command('info', 'lsjobhistory',{ 'filtervalue': kwargs })
-    except:
-      raise
-    else:
-      return ActJobsCollection (self, lsjob_out['result'] + lsjobhist_out['result'])
-
 
   def clone_database(self, source_hostname, source_appname, target_hostname, restoretime="", strict_policy=True, **kwargs):
     '''
@@ -781,17 +757,130 @@ class Actifio:
  
     # mountimage steps
     # print (mountimage_args)
-    try:
-      mountimage_out = self.run_uds_command("task", "mountimage", mountimage_args)
-    except:
-      raise
-    else:
-      result_job_name = mountimage_out['result'].split(" ")[0]
-      try:
-        return self.get_jobs(jobname=result_job_name)[0]
-      except:
-        raise
+    mountimage_out = self.run_uds_command("task", "mountimage", mountimage_args)
 
-    
+    result_job_name = mountimage_out['result'].split(" ")[0]
+    result_image_name = mountimage_out['result'].split(" ")[3]
         
+    return (self.get_jobs(jobname=result_job_name)[0], self.get_images(backupname=result_image_name))
 
+  def simple_mount(self,source_application=None, target_host=None, mount_image=None, 
+  restoretime="", strict_policy=False, pre_script="",post_script="", nowait=True, 
+  job_class="snapshot", label="Python Library", **kwargs):
+    """
+    This method mounts a simple mount operation, for a application type. This mount will not create a 
+    virtual clone (if you need to create a virtual clone look into clone_database() instead).
+
+      If not mount_image is None:
+      mount_image (required): ActImage object refering to mount image
+
+      ElseIf not source_application is None:
+      source_hostname (required): hostname where the server was backed up from.
+      source_appname (required): name of the application
+      
+      Else:
+      source_application (required): ActApplication object refereing to source application
+
+      If not target-host is None:
+      target_hostname (required): hostname of the target host
+
+      Else:
+      target_host (required): ActHost object refering to the target host
+
+      restoretime (optional): recovery time of the mount image, depending on the strict_policy, 
+                              the closest image will be selected. 
+      strict_policy (optional): Boolean, defaults to False, if True, application is treated as 
+                                transaction log capable and image is selected to a level where 
+                                recoverable to restoretime. Else closest image to the time will be 
+                                selected
+      pre_script (optional): Pre Script for the mount operation
+      post-script (optional): Post Script for the mount operation
+      nowait (optional): defaults to True, mount job will not wait till the completion, if False, 
+                         this method will be blocking until the job completion.
+      job_class (optional): Defaults to "snapshot", valid jobclasses are, [ snapshot | dedup | 
+                            dedupasync | OnVault ]
+
+      # FileSystems options (including Oracle / SQL Server / Linux LVM)
+      
+      mountpointperdisk (optional): mountpoint or the drive
+      mapdiskstoallclusternodes (optional): Defaults to False, map disks to all the clusters
+      mapdiskstoallesxhosts (optional): Defaults to False, map disks to all the ESXi hosts in a cluster.
+
+      # VM options
+      poweronvm (optional): Poweron the mounted VM
+
+      If create_newvm is True:
+      target_vmdatastore (optional): Target datastore to mount the VM.
+          
+      mount_mode (optional): Takes the value, physical (pRDM), independentvirtual (vRDM), or nfs (requires 9.0)
+      maptoallesxhosts (optional): Defaults to False. Map to all the ESXi hosts in the cluster.
+
+      returns a Tuple with (ActJob , ActImage):
+    """    
+
+    mountimage_args = {}
+
+    if source_application is None:
+      if source_appname != "" and source_hostname != "":
+        apps_list = self.get_applications(appname=source_appname,hostname=source_hostname,friendlytype=source_appclass)
+        if len(apps_list) == 1:
+          source_application = apps_list[0]
+        else:
+          raise ActUserError("'source_appname' and 'source_hostname' could not be found." )
+      else:
+        raise ActUserError("'source_appname' and 'source_hostname' is required when 'source_application' is not specified.")
+
+    if restoretime == "":
+      mountimage_args.__setitem__('appid', source_application.id)
+      # still we need a image to generate the restoreoptions
+      mount_image = self.get_images(appid=source_application.id)[0] 
+      # TODO: This is a costly approch to get a single image. Need to come up with a better
+      # approach  
+    else:
+      if mount_image is None:
+        mount_image = self.get_image_bytime(source_application,restoretime,strict_policy,job_class)
+
+        if mount_image is None:
+          raise ActUserError("Unable to find a suitable image for the 'restoretime' and 'strict_policy' criteria.")
+
+      mountimage_args.__setitem__('image',mount_image.imagename)
+    
+    if isinstance(target_host,ActHost):
+      mountimage_args.__setitem__('host',target_host.id)
+    else:
+      raise ActUserError("'target_host' need to be specified and ecpects ActHost object")
+
+    if nowait:
+      mountimage_args.__setitem__('nowait', None)
+    
+    script_data = []
+
+    if pre_script != "":
+      script_data.append('name='+pre_script+':phase=PRE')
+    
+    if post_script != "":
+      script_data.append('name='+post_script+':phase=POST')
+    
+    if len(script_data) != 0:
+      mountimage_args.__setitem__('script',';'.join(script_data))
+
+    # get the list of restore options
+
+    restoreopts = mount_image.restoreoptions('mount', target_host)
+
+    restoreopts_data = []
+
+    for opt in restoreopts:
+      kwargs_opt = kwargs.get(opt.name)
+      if kwargs_opt is not None:
+        restoreopts_data.append(opt.name + "=" + str(kwargs_opt))
+    
+    if len(restoreopts_data) != 0:
+      mountimage_args.__setitem__('restoreoption',','.join(restoreopts_data))
+
+    mountimage_out = self.run_uds_command('task','mountimage',mountimage_args)
+
+    result_job_name = mountimage_out['result'].split(" ")[0]
+    result_image_name = mountimage_out['result'].split(" ")[3]
+        
+    return (self.get_jobs(jobname=result_job_name)[0], self.get_images(backupname=result_image_name)[0])
