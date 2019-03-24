@@ -96,6 +96,10 @@ class ActRestoreoption(ActObject):
     super(ActRestoreoption, self).__init__(appliance, restoptiondata, restoptiondata['name'], restoptiondata['name'])
 
 class ActRestoreoptionCollection(ActObjCollection):
+  '''
+  Iterable class of collection of resotore options.
+
+  '''
   def __init__(self, appliance, lsrestoreoptionsdata):
     return super(ActRestoreoptionCollection, self).__init__("restoreoptions", ActRestoreoption, appliance, lsrestoreoptionsdata)
 
@@ -135,14 +139,34 @@ class ActImage(ActObject):
     super(ActImage, self).__init__(applaince, imgdata, imgdata['backupname'], imgdata['id'])
 
   def details(self):
-    image_details = self.appliance.run_uds_command("info","lsbackup",{ "argument" : self.id })
+    """
+    Fetch further details of the backups image.
+
+    Args:
+
+      None
+    
+    Returns:
+
+      None
+
+    """
+    image_details = self.appliance.run_uds_command("info", "lsbackup", { "argument" : self.id })
     self.objectdata = image_details['result']
 
   def restoreoptions (self, action, targethost):
     """
     Retrieve restore options for a ActImage for mount / clone / restore operations
-      action (required): operation [ mount, restore , clone ]
-      targethost (required): Host ID of the targethost, ActHost type 
+
+    Args:
+
+      :action (required): operation [ mount, restore , clone ]
+      :targethost (required): Host ID of the targethost, ActHost type 
+
+    Returns:
+
+      Returns a ActRestoreoptionCollection object with the relavant restore options for this image, for the specified action.
+
     """
     if not isinstance(targethost,ActHost):
       raise ActUserError("'targethost' needs to be ActHost type")
@@ -170,6 +194,15 @@ class ActJob(ActObject):
   def refresh(self):
     """
     Method to refresh the job details.
+
+    Args:
+
+      None
+
+    Returns:
+
+      None
+      
     """
 
     if self.status == 'running' or self.status == 'waiting':
@@ -188,6 +221,11 @@ class ActJob(ActObject):
 
 
 class ActJobsCollection(ActObjCollection):
+  '''
+
+  Iterable collection of jobs.
+
+  '''
   def __init__(self, appliance, lsjobsalldata):
     return super(ActJobsCollection, self).__init__("jobs", ActJob, appliance, lsjobsalldata)
 

@@ -67,14 +67,32 @@ class ActEnforce():
         return result
     return decorated
 
+  @classmethod
+  def needs_version(cls, act_func):
+    @wraps(act_func)
+    def decorated(cls, *args, **kwargs):
+      if cls.version == 'not_known':
+        version = cls.run_uds_command ('info', 'lsversion', {})
+        cls.version = version['result'][0]['version']
+      try:
+        return act_func(cls,*args, **kwargs)
+      except:
+        # print(act_func.__name__ + "failed")
+        raise     
+    return decorated
+
 
 class Actifio:
   """
   Actifio instance:
+  
+  Attributes:
 
-  appliance: IP or FQDN of the appliance
-  username: Username to login to the appliance
-  password: Password
+    :appliance: IP or FQDN of the appliance
+    :username: Username to login to the appliance
+    :password: Password
+    :cert_validation: Certificate validation for SSL connections. 
+                      Defaults to false.
 
   """
   _sessionid = {}
@@ -83,9 +101,9 @@ class Actifio:
     """
     Actifio instance:
 
-    appliance: IP or FQDN of the appliance
-    username: Username to login to the appliance
-    password: Password
+    :appliance: IP or FQDN of the appliance
+    :username: Username to login to the appliance
+    :password: Password
 
     """
     # vendor key is fixed
@@ -96,6 +114,7 @@ class Actifio:
     self._apiBase = "/actifio/api"
     self.appliance = appliance
     self.username = username
+    self.version = 'not_known'
     #sessionid is unique per user in an appliance
     Actifio._sessionid.update( { appliance: {} } )
     Actifio._sessionid[appliance].update( { username: ''} )
@@ -164,8 +183,27 @@ class Actifio:
           Actifio._sessionid[self.appliance][self.username] = response['sessionid']
         except:
           raise ActLoginError(response['errormessage'])
+      elif login.status == 401:
+        if response.get('errorcode') == 10011: 
+          raise ActLoginError("Invalid username or password")
+        else:
+          raise ActLoginError("This does not seem to be a Actifio Sky/CDS appliance")
       else:
         raise ActLoginError("This does not seem to be a Actifio Sky/CDS appliance")
+
+  @ActEnforce.needs_version 
+  #@staticmethod
+  def _minimum_version (self, min_version):
+    print (self.version)
+    comp_version = self.version.split(".")
+    comp_min_version = min_version.split(".")
+
+    for index in [0 , 1 , 2 , 3]:
+      if int(comp_version[index]) > int(comp_min_version [index]):
+        return True
+      if int(comp_version[index]) < int(comp_min_version [index]):
+        return False
+    return True
 
   @ActEnforce.needs_token
   def run_uds_command(self, cmdType, 
@@ -173,21 +211,34 @@ class Actifio:
     cmdArgs={}):
     """
     Wrapper function to convert CLI commands to the rest API.
-      cmdType: info / task 
-      cmdUDS: Command to use (eg. lsuser, lshost, mkapplication... etc.)
-      cmdArgs: Dictionary with arguments to the command
-               For example: 
-               vmdiscovery -discovercluster -host 1234 
-               { 'discovercluster': None, 'host': 1234 }
 
-               lsapplication -filtervalues "appname=mydb&hostname=myhost"
-               { 'filtervalues': { 'appname': 'mydb', 'hostname': 'myhost' } }
+    Args:
 
-               lshost 123
-               { 'argument': 123 }
+      :cmdType: info / task 
+      :cmdUDS: Command to use (eg. lsuser, lshost, mkapplication... etc.)
+      :cmdArgs: Dictionary with arguments to the command
+    
+    Returns:
 
-               RESTfulAPI_*.pdf would be good referecne point for the __SIMILARITY__ and 
-               __PATTERN__.
+      Returns a dictionary of API response.
+
+    Example: 
+
+      vmdiscovery -discovercluster -host 1234 
+
+      { 'discovercluster': None, 'host': 1234 }
+
+      lsapplication -filtervalues "appname=mydb&hostname=myhost"
+
+      { 'filtervalues': { 'appname': 'mydb', 'hostname': 'myhost' } }
+
+      lshost 123
+
+      { 'argument': 123 }
+
+
+    .. note:: RESTfulAPI_*.pdf would be good referecne point for the __SIMILARITY__ and __PATTERN__ of the cmdArgs.
+
     """
 
     _URI = self._infoURI if cmdType == "info" else self._taskURI
@@ -249,11 +300,22 @@ class Actifio:
   def run_sarg_command(self, cmdSARG, cmdArgs={}):
     """
     Wrapper function to convert CLI commands to the rest API. 
-      cmdSARG: Command to use (eg. reportsnaps, reportapps... etc.)
-      cmdArgs: Dictionary with arguments to the command
-               For example: 
-               reportapps -a 1234 -x
-               { 'a': 1234, 'x': None }
+
+    Args:
+
+      :cmdSARG: Command to use (eg. reportsnaps, reportapps... etc.)
+      :cmdArgs: Dictionary with arguments to the command
+
+    Return:
+
+      return a dictionary of the SARG command, mapping to the same JSON response from the API.
+
+    Example:
+
+      reportapps -a 1234 -x
+
+      self.run_sarg_command("reportapps", { 'a': 1234, 'x': None })
+
     """
 
     _URI = self._sargURI
@@ -290,43 +352,34 @@ class Actifio:
 
   def get_hosts (self, **kwargs):
     '''
-    Supported filter parameters are:
+    This method query for the hosts registered in Actifio applaince. You can specify a combination of following filter attributes.
 
-    *  alternateip
-      IP address which is not the primary Ip address
+    Attributes:
 
-    *  diskpref
-      Valid options are: BLOCK / NFS
+      :alternateip: Specifies the alternate IP address of the host. Multiple alternate can be specified in a comma-delimited list. To remove the alternate IP address, use an empty field with double quotes.
+      :description: Description of the host.
+      :diskpref: Specifies preference (BLOCK or NFS) for presenting the staging disk. Default value is BLOCK. 
+      :friendlypath: Friendly path for the host. 
+      :hasagent: Tells us whether the host has an agent. 0= none, 1= yes <-- this is true/false
+      :hostname: Host name
+      :hosttype: Host type, for example generic, hmc, hpux, hyperv, isilon, netapp svm, netapp 7 mode, openvms, tpgs, or vcenter.
+      :isclusterhost: Host is a clustered host.
+      :ipaddress: IP address of the host.
+      :isesxhost: Whether the host is an esx server.
+      :isvcenterhost: Whether the host is a management server, such as a vCenter.
+      :isvm: Whether the host is a VM.
+      :originalhostid: Identifies original host id for shadow host.
+      :osrelease: Operating system release.
+      :ostype: Operating system type.
+      :osversion: Operating system version.
+      :sourcecluster: Identifies the original cluster ID for shadow host
+      :svcname: Specifies the SVC host name, which limits to 15 characters, first character cannot be a number, and no space, or '.' is allowed.
+      :uniquename: Unique name for the host.
+      :vcenterhostid: The vCenter host ID.
 
-    *  friendlypath
-      Friendly path of the host
+    Returns:
 
-    *  hasagent
-      Hosts with agent istalled
-
-    *  hostname
-      Host name, as defined in Actifio
-
-    *  hosttype
-      Host type, accepted options:  generic | hmc | hpux | hyperv | isilon | netapp 7 mode | 
-      netapp svm | openvms | tpgs | vcenter
-
-    *  ipaddress
-      IP dddress of the host name. This is the main IP. Check alternateip option for the alternate IP addresses.
-
-    *  isvm
-      If set to true, will retrun hosts defined as VMs.
-
-    *  isesxhost
-    *  isvcenterhost
-    *  originalhostid
-    *  osrelease
-    *  osversion
-    *  sourcecluster
-    *  svcname
-    *  uniquename
-    *  vcenterhostid
-    *  isclusterhost
+      Returns the ActHostCollection object with a list of Host entries to satisfy the filter criteria.
 
     '''
     try:
@@ -341,35 +394,31 @@ class Actifio:
 
   def get_applications (self, **kwargs):
     '''
-    Supported filter parameters are:
+    This method query for the registered applications within a Actifio applaince. You can specify a combination of following filter attributes.
 
-    *  appname
-      Application name
+    Attributes:
 
-    *  apptype
-      Application Type
+      :appname: Application name
+      :apptype: Application type
+      :appversion: Whatever we glean during discovery, and it is not always available.
+      :auxinfo: For internal use, not likely to be useful.
+      :description: Description of the application.
+      :friendlytype: Friendly type for the application
+      :hostid: Host id.
+      :hostname: Host name.
+      :id: Application id.
+      :ignore: Allows the user to ignore the application (when set), so application will not show up in the UI.
+      :isclustered: Specifies if the application is part of a cluster.
+      :networkip: The network IP of the application
+      :networkname: The network name of the application.
+      :originalappid: Original application id.      
+      :pathname: The path name of the application
+      :protectable:  None means you cannot protect it, fully means you can, partial means there is limited support.
+      :sourcecluster:  Identifies the original cluster ID for shadow host ( when we create a shadow application or shadow host, this tells us where it originates from).
 
-    *  appversion
-    *  auxinfo
-    *  description
-    *  friendlytype
-    *  hostid
-      Source HostID
+    Returns:
 
-    *  hostname
-      Source Hostname
-
-    *  id
-      Application ID
-
-    *  ignore
-    *  isclustered
-    *  networkip
-    *  networkname
-    *  originalappid
-    *  pathname
-    *  protectable    [ NONE | FULLY | PARTIALLY ]
-    *  sourcecluster
+      Instance of ActAppCollection object with a collection of all the application matching the filter criteria.
 
     '''
     try:
@@ -384,43 +433,38 @@ class Actifio:
 
   def get_images(self, **kwargs):
     '''
-    Supported filtervalues are:
+    
+    Queries Actifio appliance with matching backups images as specified by the filter criteria. if no filter criteria specified will return all the backup images.
 
-    *  appid
-      Application ID
+    Args:
 
-    *  appname
-      Application Name
+      :appid: Application object ID.
+      :appname: Application name
+      :apptype: Application type
+      :backupdate: Start date [usage: 'backupdate since 24 hours' for backups started since last 24 hours,'backupdate before 7 days' for backups started older than 7 days]
+      :backupname: Image name.
+      :characteristic: Charchteristic for of backup type (in addition to jobclass [PRIMARY | MOUNT | UNMOUNT | VDISK | CLONE]
+      :consistencydate: consistency date of the backup 
+      :consistency-mode: Consistency mode of image (for example, application consistent or crash consistent).
+      :expiration: Date and time when this should expire. Images with an enforced retention (including remote images) cannot be expired before they reach the immutability date.
+      :hostid: Application ID of the host where the backup image ??? <-- host ID of the capture job host
+      :hostname: Name of the host where the backup image is???? <-- host name of the capture job host
+      :jobclass: Type of jobs [ snapshot | dedup | dedupasync | clone | liveclone | syncback ]
+      :label: label of the backup that user specified.
+      :mappedhost: ID of the host to which backup image is mapped.
+      :mountedhost: ID of host where backup image is mounted.
+      :policyname: Name of the policy on which this object is created.
+      :prepdate: Date when LiveClone image is created. 
+      :slpname: Profile name used while creating this image.
+      :sltname: SLA template name used while creating this image.
+      :sourceimage: obsolete
+      :sourceuds: Cluster ID of the source cluster
+      :targetuds: Cluster ID of the target cluster
+      :virtualsize: Application size
 
-    *  apptype
-      Application type
+    Returns:
 
-    *  backupname
-      Image Name
-
-    *  characteristic    [ PRIMARY | MOUNT | UNMOUNT ]
-    *  consistencydate
-      Backup consistency date
-
-    *  expiration
-    *  hostid
-    *  hostname
-      Source Hostname
-
-    *  jobclass          [ snapshot | dedup | dedupasync | liveclone | syncback ]
-    *  label
-      Backu label
-
-    *  mappedhost
-    *  mountedhost
-    *  policyname
-    *  prepdate
-    *  slpname
-    *  sltname
-    *  sourceimage
-    *  sourceuds
-    *  targetuds
-    *  virtualsize
+      Return the backups image collection in ActImgCollection object. 
 
     '''
 
@@ -436,31 +480,37 @@ class Actifio:
 
   def get_jobs(self, **kwargs):
     '''
-    Supported filtervalues are:
+    This method query for the jobs, running and archived. The following filter arguments can be used to refine the output. Returns ActJobCollection object.
 
-   *  appid
-   *  appname
-   *  component
-   *  enddate
-   *  errorcode
-   *  expirationdate
-   *  hostname
-   *  isscheduled       [ true | false ]
-   *  jobclass          
-   *  jobname
-   *  jobtag
-   *  parentid
-   *  policyname
-   *  priority
-   *  progress
-   *  queuedate
-   *  relativesize
-   *  retrycount
-   *  sltname
-   *  startdate
-   *  status            [ running | queued | paused | interrupted | stalled ]
-   *  sourceid
-   *  virtualsize
+    Args:
+
+      :appid:
+      :appname:
+      :component:
+      :enddate:
+      :errorcode:
+      :expirationdate:
+      :hostname:
+      :isscheduled:       [ true | false ]
+      :jobclass:          
+      :jobname:
+      :jobtag:
+      :parentid:
+      :policyname:
+      :priority:
+      :progress:
+      :queuedate:
+      :relativesize:
+      :retrycount:
+      :sltname:
+      :startdate:
+      :status:            [ running | queued | paused | interrupted | stalled ]
+      :sourceid:
+      :virtualsize:
+
+    Returns:
+      
+      :doc:`ActJobCollection </actjobcollection>` object with a collection of jobs as per the selection criteria.
 
     '''
     try:
@@ -469,16 +519,22 @@ class Actifio:
     except:
       raise
     else:
-      return ActJobsCollection (self, lsjob_out['result'] + lsjobhist_out['result'])
+      return ActJobsCollection ( self, lsjob_out['result'] + lsjobhist_out['result'] )
 
   def get_image_bytime(self, application, restoretime, strict_policy=False, job_class="snapshot"):
     """
-    This method return a ActImage object with a single imaage to the specified restore time.
+    This method returns a ActImage object with a single image to the specified restore time.
 
-      application: should be the application in the form of ActApplication object.
-      strict_policy: [True | False] If set to true, the image will be selected from log recovery range, with                  the closest image to replay the logs on.  
-      restoretime: can be datetime obect or string with the format [YYYY-MM-DD HH:mm:ss]
-      job_class: Defaults to snapshot. Should be string type, to any supported image jobclass.
+    Args:
+
+      :application: should be the application in the form of ActApplication object.
+      :strict_policy: [True | False] If set to true, the image will be selected from log recovery range, with the closest image to replay the logs on.  
+      :restoretime: can be datetime obect or string with the format [YYYY-MM-DD HH:mm:ss] job_class: Defaults to snapshot. Should be string type, to any supported image jobclass.
+
+    Returns:
+
+      **ActImage** object to the specified *restoretime*. If strict_policy is set to *True*, the image will selected to the closest *restoretime*, where redo logs can be played up to the *restoretime*. If *strict_policy* is set to *False*, then the closest image to the restore time will be selected. When *strict_policy* is *False*, the recovery image consistencytime could be ahead of the *restoretime*, however *strict_policy* is True would ensure image consistency time is always lower than the *restoretime*.
+
     """
     from datetime import datetime
     timeformat = "%Y-%m-%d %H:%M:%S"
@@ -577,54 +633,66 @@ class Actifio:
 
   def clone_database(self, source_hostname, source_appname, target_hostname, restoretime="", strict_policy=True, **kwargs):
     '''
+
     This method creates a virtual clone of Oracle or SQL server database.
-      source_hostname: Hostname of the source host where the database was captured from
-      source_appname: source application name, or the database name
-      target_hostname: target host where the virtual clone need to be created on
 
-      Miscelaneous Parameters
-        restoretime: Point in time the database needs to be recovered to.
-        strict_policy: Defaults to True, If set to True (only for applications with log database backups), databases will be cloned to the time specified. 
-        nowait: defaults to True, if True, this method will be non-blocking mode.
+    Agrs:
 
-      Oracle Related Parameters:
-        oracle_home (required): ORACLE_HOME
-        oracle_db_name (required): SID of the target clone
-        oracle_user (optional): Defaults to "oracle".
-        oracle_tns_admin (optional): TNS admin path, defaults to $ORACLE_HOME/network/admin.
-        oracle_db_mem (optional): Total Memory Target for the database, defaults to 512MB.
-        oracle_sga_pct (optional): Memory Percentage to allocate for SGA
-        oracle_redo_size (optional): Redo Log size in MB, defaults to 500
-        oracle_shared_pool (optional): Oracle Shared Pool size
-        oracle_db_cache_size (optional): Oracle DB Cache size
-        oracle_recover_dest_size (optional): Oracle Parameter db_recover_dest_size. Defaults to 5000
-        oracle_diagnostic_dest (optional): Oracle Diagnostic Destination
-        oracle_nprocs (optional): Num of Max processes
-        oracle_open_cursors (optional): Number of open_cursors. defaults to 1000 
-        oracle_char_set (optional): Characterset. Defaults to 'AL32UTF8'
-        oracle_tns_ip (optional): TNS IP Address
-        oracle_tns_port (optional): TNS Port
-        oracle_tns_domain (optional): TNS Domain
-        oracle_no_nid (optional): Do not change the DBID of the new clone. Will maintain same DBID as the source. Defaults to FALSE
-        oracle_no_tns_update (optional): Do not update TNS records. Defaults to FALSE
-        oracle_restore_recov (optional): Recover the oracle database. Defaults to TRUE
-        oracle_no_rac (optional): Treat as Oracle RAC. Defaults to TRUE
+      :source_hostname: Hostname of the source host where the database was captured from
+      :source_appname: source application name, or the database name
+      :target_hostname: target host where the virtual clone need to be created on
 
-      SQLServer Related
-        sql_instance_name (required): Target SQL Server instance name
-        sql_recover_userlogins (optional): Recover user logins of the database. Defaults to FALSE
-        sql_username (optional): Username for database provisioning
-        sql_password (optional): Password for the specified user 
-        
-      SQLServer DB Application
-        sql_db_name (reuired): Database name at the target instance. (Only required if the source application is database or single database mount from instance.) 
+      *Miscelaneous Parameters*
 
-      SQLServer Instance 
-        sql_source_dbnames (required): Source database names if the source application is SQL instance. Use ',' as delimiter for multiple databases. (Only required if the source application is SQL server instance.) 
-        sql_cg_name (required): Consistency group name. (Only required if the source application is SQL Server instance and mount multiple databases at a time.)
-        sql_dbname_prefix (optional): Prefix of database name for multiple database mount
-        sql_dbname_suffix (optional): Suffix of database name for multiple database mount
+      :restoretime: Point in time the database needs to be recovered to.
+      :strict_policy: Defaults to True, If set to True (only for applications with log database backups), :databases will be cloned to the time specified. 
+      :nowait: defaults to True, if True, this method will be non-blocking mode.
 
+      *Oracle Related Parameters*
+
+      :oracle_home (required): ORACLE_HOME
+      :oracle_db_name (required): SID of the target clone
+      :oracle_user (optional): Defaults to "oracle".
+      :oracle_tns_admin (optional): TNS admin path, defaults to $ORACLE_HOME/network/admin.
+      :oracle_db_mem (optional): Total Memory Target for the database, defaults to 512MB.
+      :oracle_sga_pct (optional): Memory Percentage to allocate for SGA
+      :oracle_redo_size (optional): Redo Log size in MB, defaults to 500
+      :oracle_shared_pool (optional): Oracle Shared Pool size
+      :oracle_db_cache_size (optional): Oracle DB Cache size
+      :oracle_recover_dest_size (optional): Oracle Parameter db_recover_dest_size. Defaults to 5000
+      :oracle_diagnostic_dest (optional): Oracle Diagnostic Destination
+      :oracle_nprocs (optional): Num of Max processes
+      :oracle_open_cursors (optional): Number of open_cursors. defaults to 1000 
+      :oracle_char_set (optional): Characterset. Defaults to 'AL32UTF8'
+      :oracle_tns_ip (optional): TNS IP Address
+      :oracle_tns_port (optional): TNS Port
+      :oracle_tns_domain (optional): TNS Domain
+      :oracle_no_nid (optional): Do not change the DBID of the new clone. Will maintain same DBID as the source. Defaults to FALSE
+      :oracle_no_tns_update (optional): Do not update TNS records. Defaults to FALSE
+      :oracle_restore_recov (optional): Recover the oracle database. Defaults to TRUE
+      :oracle_no_rac (optional): Treat as Oracle RAC. Defaults to TRUE
+
+      *SQLServer Related*
+
+      :sql_instance_name (required): Target SQL Server instance name
+      :sql_recover_userlogins (optional): Recover user logins of the database. Defaults to FALSE
+      :sql_username (optional): Username for database provisioning
+      :sql_password (optional): Password for the specified user 
+
+      *SQLServer DB Application*
+
+      :sql_db_name (reuired): Database name at the target instance. (Only required if the source application is database or single database mount from instance.) 
+
+      *SQLServer Instance*
+
+      :sql_source_dbnames (required): Source database names if the source application is SQL instance. Use ',' as delimiter for multiple databases. (Only required if the source application is SQL server instance.) 
+      :sql_cg_name (required): Consistency group name. (Only required if the source application is SQL Server instance and mount multiple databases at a time.)
+      :sql_dbname_prefix (optional): Prefix of database name for multiple database mount
+      :sql_dbname_suffix (optional): Suffix of database name for multiple database mount
+
+    Returns:
+
+      This method returns a tuple of (ActJob,ActImage), respectively the resulting Job and Image. 
 
     '''
     # parse kwargs 
@@ -768,54 +836,59 @@ class Actifio:
   restoretime="", strict_policy=False, pre_script="",post_script="", nowait=True, 
   job_class="snapshot", label="Python Library", **kwargs):
     """
+
     This method mounts a simple mount operation, for a application type. This mount will not create a 
     virtual clone (if you need to create a virtual clone look into clone_database() instead).
 
-      If not mount_image is None:
-      mount_image (required): ActImage object refering to mount image
+    Args:
 
-      ElseIf not source_application is None:
-      source_hostname (required): hostname where the server was backed up from.
-      source_appname (required): name of the application
+      *If not mount_image is None*
+
+      :mount_image (required): ActImage object refering to mount image
+
+      *ElseIf not source_application is None*
+
+      :source_hostname (required): hostname where the server was backed up from.
+      :source_appname (required): name of the application
       
-      Else:
-      source_application (required): ActApplication object refereing to source application
+      *Else*
 
-      If not target-host is None:
-      target_hostname (required): hostname of the target host
+      :source_application (required): ActApplication object refereing to source application
 
-      Else:
-      target_host (required): ActHost object refering to the target host
+      *If not target-host is None*
 
-      restoretime (optional): recovery time of the mount image, depending on the strict_policy, 
-                              the closest image will be selected. 
-      strict_policy (optional): Boolean, defaults to False, if True, application is treated as 
-                                transaction log capable and image is selected to a level where 
-                                recoverable to restoretime. Else closest image to the time will be 
-                                selected
-      pre_script (optional): Pre Script for the mount operation
-      post-script (optional): Post Script for the mount operation
-      nowait (optional): defaults to True, mount job will not wait till the completion, if False, 
+      :target_hostname (required): hostname of the target host
+
+      *Else*
+
+      :target_host (required): ActHost object refering to the target host
+
+      :restoretime (optional): recovery time of the mount image, depending on the strict_policy, the closest image will be selected. 
+      :strict_policy (optional): Boolean, defaults to False, if True, application is treated as transaction log capable and image is selected to a level where recoverable to restoretime. Else closest image to the time will be selected
+
+      :pre_script (optional): Pre Script for the mount operation
+      :post-script (optional): Post Script for the mount operation
+      :nowait (optional): defaults to True, mount job will not wait till the completion, if False, 
                          this method will be blocking until the job completion.
-      job_class (optional): Defaults to "snapshot", valid jobclasses are, [ snapshot | dedup | 
-                            dedupasync | OnVault ]
+      :job_class (optional): Defaults to "snapshot", valid jobclasses are, [ snapshot | dedup | 
+                            dedupasync | OnVault ]          
+      :mount_mode (optional): Takes the value, physical (pRDM), independentvirtual (vRDM), or nfs (requires 9.0)
+      :maptoallesxhosts (optional): Defaults to False. Map to all the ESXi hosts in the cluster.
 
-      # FileSystems options (including Oracle / SQL Server / Linux LVM)
-      
-      mountpointperdisk (optional): mountpoint or the drive
-      mapdiskstoallclusternodes (optional): Defaults to False, map disks to all the clusters
-      mapdiskstoallesxhosts (optional): Defaults to False, map disks to all the ESXi hosts in a cluster.
+      *Restore Options*
 
-      # VM options
-      poweronvm (optional): Poweron the mounted VM
+      Any of the restoreoptions as listed in the **udsinfo lsrestoreoptions** can be specified as key=value command arguments.
 
-      If create_newvm is True:
-      target_vmdatastore (optional): Target datastore to mount the VM.
-          
-      mount_mode (optional): Takes the value, physical (pRDM), independentvirtual (vRDM), or nfs (requires 9.0)
-      maptoallesxhosts (optional): Defaults to False. Map to all the ESXi hosts in the cluster.
+      .. note:: For more information on the restore options refer to the Appendix F on the RESTfulAPI.pdf. 
+
+    Returns:
+
+      This method returns a tuple of (ActJob,ActImage), respectively the resulting Job and Image. 
+
 
       returns a Tuple with (ActJob , ActImage):
+
+  
     """    
 
     mountimage_args = {}
@@ -864,6 +937,17 @@ class Actifio:
     if len(script_data) != 0:
       mountimage_args.__setitem__('script',';'.join(script_data))
 
+    if mount_mode in ['physical', 'independentvirtual', 'nfs']:
+      if self._minimum_version("9.0.0.0"):
+        mountimage_args.__setitem__('rdmmode', mount_mode)
+      else:
+        if mount_mode == "physical":
+          mountimage_args.__setitem__('physicalrdm', None)
+        elif mount_mode == "nfs":
+          sys.stderr.write("RDM Mode for nfs requires minimum Actifio 9.0.0\n")
+    else:
+      raise ActUserError("'mount_mode' should be from ['physical', 'independentvirtual', 'nfs']")
+
     # get the list of restore options
 
     restoreopts = mount_image.restoreoptions('mount', target_host)
@@ -873,7 +957,7 @@ class Actifio:
     for opt in restoreopts:
       kwargs_opt = kwargs.get(opt.name)
       if kwargs_opt is not None:
-        restoreopts_data.append(opt.name + "=" + str(kwargs_opt))
+        restoreopts_data.append(opt.name + "-" +  + "=" + str(kwargs_opt))
     
     if len(restoreopts_data) != 0:
       mountimage_args.__setitem__('restoreoption',','.join(restoreopts_data))
