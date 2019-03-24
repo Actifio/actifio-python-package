@@ -16,7 +16,7 @@ elif sys.version[0] == "3":
 
 __metaclass__ = type
 
-class ActObject ():
+class ActObjec():
   def __init__(self, appliance, objectData, printable, uniqueid):
     """
     Initiator forthe ActObjeect. This will be a base class for all the other Actifio Object types
@@ -39,10 +39,8 @@ class ActObject ():
   def get(self, parameter):
     return self.objectdata.get(parameter)
 
-  def refresh (self):
-    pass
 
-class ActObjCollection ():
+class ActObjCollection():
   def __init__(self, objecttype, retobject, appliance, objectData):
     """
     This is the base object class for all the Actifio support object types.
@@ -67,7 +65,7 @@ class ActObjCollection ():
   def __len__(self):
     return len(self.objectdata)
 
-  def __getitem__(self,_index):
+  def __getitem__(self, _index):
     return self.returnobj(self.appliance, self.objectdata[_index])
   
   class ActObjIterator:
@@ -110,7 +108,7 @@ class ActHost(ActObject):
     super(ActHost, self).__init__(applaince, hostdata, hostdata['hostname'], hostdata['id'])
 
   def details(self):
-    host_details = self.appliance.run_uds_command("info","lshost",{ "argument" : self.id })
+    host_details = self.appliance.run_uds_command("info", "lshost", {"argument" : self.id})
     self.objectdata = host_details['result'] 
 
 
@@ -125,7 +123,7 @@ class ActApplication(ActObject):
     super(ActApplication, self).__init__(applaince, appdata, appdata['appname'], appdata['id'])
 
   def details(self):
-    app_details = self.appliance.run_uds_command("info","lsapplication",{ "argument" : self.id })
+    app_details = self.appliance.run_uds_command("info", "lsapplication", {"argument" : self.id})
     self.objectdata = app_details['result'] 
 
 class ActAppCollection(ActObjCollection):
@@ -151,10 +149,10 @@ class ActImage(ActObject):
       None
 
     """
-    image_details = self.appliance.run_uds_command("info", "lsbackup", { "argument" : self.id })
+    image_details = self.appliance.run_uds_command("info", "lsbackup", {"argument" : self.id})
     self.objectdata = image_details['result']
 
-  def restoreoptions (self, action, targethost):
+  def restoreoptions(self, action, targethost):
     """
     Retrieve restore options for a ActImage for mount / clone / restore operations
 
@@ -168,13 +166,13 @@ class ActImage(ActObject):
       Returns a ActRestoreoptionCollection object with the relavant restore options for this image, for the specified action.
 
     """
-    if not isinstance(targethost,ActHost):
+    if not isinstance(targethost, ActHost):
       raise ActUserError("'targethost' needs to be ActHost type")
 
     if action not in ['mount', 'clone', 'restore']:
       raise ActUserError("Allowed values for 'action' are mount, clone and restore")
     
-    restoreops_capabilities = self.appliance.run_uds_command ('info','lsrestoreoptions', { 'applicationtype': self.apptype, 'action': 'mount', 'targethost': targethost.id })
+    restoreops_capabilities = self.appliance.run_uds_command ('info', 'lsrestoreoptions', {'applicationtype': self.apptype, 'action': 'mount', 'targethost': targethost.id })
 
     return ActRestoreoptionCollection(self, restoreops_capabilities['result'])
 
@@ -202,18 +200,18 @@ class ActJob(ActObject):
     Returns:
 
       None
-      
+
     """
 
     if self.status == 'running' or self.status == 'waiting':
       try:
-        this_job = self.appliance.run_uds_command('info','lsjob',{ 'filtervalue' : { 'jobname': str(self) } } )
+        this_job = self.appliance.run_uds_command('info', 'lsjob', {'filtervalue' : {'jobname': str(self)}})
       except:
         pass
 
       if len(this_job['result']) == 0:
         try:
-          this_job = self.appliance.run_uds_command(  'info','lsjobhistory',{ 'filtervalue' : { 'jobname': str(self) } } )
+          this_job = self.appliance.run_uds_command('info', 'lsjobhistory', {'filtervalue' : {'jobname': str(self)}})
         except:
           raise
       

@@ -2,39 +2,44 @@
 Instantiate an Actifio object to perform operations on an Actifio appliance.
 
 '''
-
-import urllib3
 import sys
 import json
 from functools import wraps
+import urllib3
 
-# import auxialary libraries 
+# import auxialary libraries
 if sys.version [:3] == "2.7":
   from actexceptions import *
-  from ActSupportClasses import ActHost, ActHostCollection, ActApplication, ActAppCollection, ActImage, ActImageCollection, ActJob, ActJobsCollection
+  from ActSupportClasses import ActHost, ActHostCollection
+  from ActSupportClasses import ActApplication, ActAppCollection
+  from ActSupportClasses import ActImage, ActImageCollection
+  from ActSupportClasses import ActJob, ActJobsCollection
 elif sys.version[0] == "3":
   from Actifio.actexceptions import *
-  from Actifio.ActSupportClasses import ActHost, ActHostCollection, ActApplication, ActAppCollection, ActImage, ActImageCollection, ActJob, ActJobsCollection
+  from Actifio.ActSupportClasses import ActHost, ActHostCollection
+  from Actifio.ActSupportClasses import ActApplication, ActAppCollection
+  from Actifio.ActSupportClasses import ActImage, ActImageCollection
+  from Actifio.ActSupportClasses import ActJob, ActJobsCollection
 
 # Import urlencode for the correct version
 if sys.version [:3] == "2.7":
   from urllib import quote_plus as urlencode_str
   from urllib import urlencode as urlencode
 elif sys.version[0] == "3":
-  # NOTE: Not sure which version supports this. Working with 3.5, so limiting support to 3.5+, 
+  # NOTE: Not sure which version supports this. Working with 3.5, so limiting support to 3.5+,
   # this is a temporary measure.
-  if int(sys.version[2]) > 4: 
+  if int(sys.version[2]) > 4:
     from urllib.parse import quote_plus as urlencode_str
     from urllib.parse import urlencode as urlencode
 
 # We do support self signed certs... and need to suppress unwanted chatter
-urllib3.disable_warnings() 
+urllib3.disable_warnings()
 
 __all__ = ['Actifio']
 
 class ActEnforce():
   @classmethod
-  def needs_token(cls,act_func):
+  def needs_token(cls, act_func):
     @wraps(act_func)
     def decorated(cls, *args, **kwargs):
       if Actifio._sessionid[cls.appliance][cls.username] == '':
@@ -53,7 +58,7 @@ class ActEnforce():
             except:
               raise
             try:
-              result = act_func(cls,*args, **kwargs)
+              result = act_func(cls, *args, **kwargs)
             except:
               # print(act_func.__name__ + "failed")
               raise
@@ -72,32 +77,32 @@ class ActEnforce():
     @wraps(act_func)
     def decorated(cls, *args, **kwargs):
       if cls.version == 'not_known':
-        version = cls.run_uds_command ('info', 'lsversion', {})
+        version = cls.run_uds_command('info', 'lsversion', {})
         cls.version = version['result'][0]['version']
       try:
-        return act_func(cls,*args, **kwargs)
+        return act_func(cls, *args, **kwargs)
       except:
         # print(act_func.__name__ + "failed")
-        raise     
+        raise
     return decorated
 
 
 class Actifio:
   """
   Actifio instance:
-  
+
   Attributes:
 
     :appliance: IP or FQDN of the appliance
     :username: Username to login to the appliance
     :password: Password
-    :cert_validation: Certificate validation for SSL connections. 
+    :cert_validation: Certificate validation for SSL connections.
                       Defaults to false.
 
   """
   _sessionid = {}
-  
-  def __init__ (self, appliance, username, password, cert_validation=False):
+
+  def __init__(self, appliance, username, password, cert_validation=False):
     """
     Actifio instance:
 
@@ -116,10 +121,10 @@ class Actifio:
     self.username = username
     self.version = 'not_known'
     #sessionid is unique per user in an appliance
-    Actifio._sessionid.update( { appliance: {} } )
-    Actifio._sessionid[appliance].update( { username: ''} )
+    Actifio._sessionid.update({appliance: {}})
+    Actifio._sessionid[appliance].update({ username: ''})
     # compose the login params
-    self._loginParams = "/login?name=" + username 
+    self._loginParams = "/login?name=" + username
     self._loginParams += "&password=" + password
     self._loginParams += "&vendorkey=" + vendorkey
 
@@ -131,7 +136,7 @@ class Actifio:
     # create the https poolmanager
     cert_str = 'CERT_REQUIRED' if cert_validation else 'CERT_NONE'
 
-    self._httppool = urllib3.HTTPSConnectionPool (host=appliance, port=443, cert_reqs=cert_str)
+    self._httppool = urllib3.HTTPSConnectionPool(host=appliance, port=443, cert_reqs=cert_str)
 
   def __str__(self):
     if Actifio._sessionid[self.appliance][self.username] == "":
@@ -140,15 +145,15 @@ class Actifio:
       return "Connection verified (session id): " + str(Actifio._sessionid[self.appliance][self.username]) + "; Appliance: " + str(self.appliance) + "; Username: " + str(self.username)
 
   @staticmethod
-  def _validate_token (self):
+  def _validate_token(self):
     """
     Validate the exisiting _sessionid token. Return True if the token is valid.
     """
-    
-    if Actifio._sessionid[self.appliance][self.username] == '' :
+
+    if Actifio._sessionid[self.appliance][self.username] == '':
       return False
     try:
-      resp = self._httppool.request (
+      resp = self._httppool.request(
         'GET',
         self._infoURI + 'lsversion?sessionid=' + Actifio._sessionid[self.appliance][self.username]
       )
@@ -161,70 +166,69 @@ class Actifio:
         return True
 
   @staticmethod
-  def _create_session (self):
+  def _create_session(self):
     """
-    Create a new session taken 
+    Create a new session taken
     """
     try:
-      login = self._httppool.request (
+      login = self._httppool.request(
         'GET',
         self._loginURI
       )
     except Exception as e:
       raise ActConnectError("Unable to reach the appliance: check the IP address / hostname")
     else:
-      try:    
+      try:
         response = json.loads(login.data)
       except:
         raise ActLoginError("This does not seem to be a Actifio Sky/CDS appliance")
-      print (login.status)
       if login.status == 200:
         try:
           Actifio._sessionid[self.appliance][self.username] = response['sessionid']
         except:
           raise ActLoginError(response['errormessage'])
       elif login.status == 401:
-        if response.get('errorcode') == 10011: 
+        if response.get('errorcode') == 10011:
           raise ActLoginError("Invalid username or password")
         else:
           raise ActLoginError("This does not seem to be a Actifio Sky/CDS appliance")
       else:
         raise ActLoginError("This does not seem to be a Actifio Sky/CDS appliance")
 
-  @ActEnforce.needs_version 
+  @ActEnforce.needs_version
   #@staticmethod
   def _minimum_version (self, min_version):
-    print (self.version)
+
     comp_version = self.version.split(".")
     comp_min_version = min_version.split(".")
 
-    for index in [0 , 1 , 2 , 3]:
-      if int(comp_version[index]) > int(comp_min_version [index]):
+    for index in [0, 1, 2, 3]:
+      if int(comp_version[index]) > int(comp_min_version[index]):
         return True
-      if int(comp_version[index]) < int(comp_min_version [index]):
+      if int(comp_version[index]) < int(comp_min_version[index]):
         return False
     return True
 
   @ActEnforce.needs_token
-  def run_uds_command(self, cmdType, 
-    cmdUDS, 
+  def run_uds_command(self, cmdType,
+    cmdUDS,
     cmdArgs={}):
     """
     Wrapper function to convert CLI commands to the rest API.
 
     Args:
 
-      :cmdType: info / task 
+      :cmdType: info / task
       :cmdUDS: Command to use (eg. lsuser, lshost, mkapplication... etc.)
       :cmdArgs: Dictionary with arguments to the command
-    
+
     Returns:
 
       Returns a dictionary of API response.
 
-    Example: 
+    Example:
 
-      vmdiscovery -discovercluster -host 1234 
+      vmdiscovery -discovercluster -host 1234
 
       { 'discovercluster': None, 'host': 1234 }
 
@@ -247,12 +251,12 @@ class Actifio:
     _URI += cmdUDS + '?'
 
     # provision for the non-equal opprations
-    def __regex_args (key, value):
+    def __regex_args(key, value):
       import re
       not_equal = re.compile(r'^not\s+(.*)')
       greater_than = re.compile(r'^\>\s*(.*)')
       smaler_than = re.compile(r'^\<\s*(.*)')
-      
+
       ne_match = not_equal.search(value)
       gt_match = greater_than.search(value)
       st_match = smaler_than.search(value)
@@ -276,14 +280,14 @@ class Actifio:
         _URI += urlencode_str(key) + '&'
       else:
         _URI += urlencode_str(key) + '=' + urlencode_str(str(cmdArgs[key])) + '&'
-        
+
     _URI += 'sessionid=' + Actifio._sessionid[self.appliance][self.username]
     try:
       udsout = self._httppool.request (
         'GET' if cmdType == 'info' else 'POST',
         _URI
       )
-      print(_URI) 
+      # print(_URI)
     except Exception as e:
       # print (e)
       raise ActConnectError("Failed to connect the appliance")
@@ -299,7 +303,7 @@ class Actifio:
   @ActEnforce.needs_token
   def run_sarg_command(self, cmdSARG, cmdArgs={}):
     """
-    Wrapper function to convert CLI commands to the rest API. 
+    Wrapper function to convert CLI commands to the rest API.
 
     Args:
 
@@ -327,15 +331,15 @@ class Actifio:
     for key in cmdArgs:
       if type(cmdArgs[key]) == dict:
         # Actifio API expects this to be urlencoded
-        _URI += key + '=' + urlencode_str('&'.join([ filter_key + '=' + cmdArgs[key][filter_key] for filter_key in cmdArgs[key]])) + '&'
+        _URI += key + '=' + urlencode_str('&'.join([filter_key + '=' + cmdArgs[key][filter_key] for filter_key in cmdArgs[key]])) + '&'
       elif cmdArgs[key] == None:
         _URI += urlencode_str(key) + '&'
       else:
         _URI += urlencode_str(key) + '=' + urlencode_str(str(cmdArgs[key])) + '&'
-        
+
     _URI += 'sessionid=' + Actifio._sessionid[self.appliance][self.username]
     try:
-      sargout = self._httppool.request (
+      sargout = self._httppool.request(
         'GET',
         _URI
       )
@@ -350,7 +354,7 @@ class Actifio:
         self._lastout = response
         return self._lastout
 
-  def get_hosts (self, **kwargs):
+  def get_hosts(self, **kwargs):
     '''
     This method query for the hosts registered in Actifio applaince. You can specify a combination of following filter attributes.
 
@@ -358,8 +362,8 @@ class Actifio:
 
       :alternateip: Specifies the alternate IP address of the host. Multiple alternate can be specified in a comma-delimited list. To remove the alternate IP address, use an empty field with double quotes.
       :description: Description of the host.
-      :diskpref: Specifies preference (BLOCK or NFS) for presenting the staging disk. Default value is BLOCK. 
-      :friendlypath: Friendly path for the host. 
+      :diskpref: Specifies preference (BLOCK or NFS) for presenting the staging disk. Default value is BLOCK.
+      :friendlypath: Friendly path for the host.
       :hasagent: Tells us whether the host has an agent. 0= none, 1= yes <-- this is true/false
       :hostname: Host name
       :hosttype: Host type, for example generic, hmc, hpux, hyperv, isilon, netapp svm, netapp 7 mode, openvms, tpgs, or vcenter.
@@ -384,15 +388,15 @@ class Actifio:
     '''
     try:
       if len(kwargs) > 0:
-        lshost_out = self.run_uds_command('info', 'lshost',{ 'filtervalue': kwargs })
+        lshost_out = self.run_uds_command('info', 'lshost', {'filtervalue': kwargs })
       else:
-        lshost_out = self.run_uds_command('info', 'lshost',{})
+        lshost_out = self.run_uds_command('info', 'lshost', {})
     except:
       raise
     else:
-      return ActHostCollection (self, lshost_out['result'])
+      return ActHostCollection(self, lshost_out['result'])
 
-  def get_applications (self, **kwargs):
+  def get_applications(self, **kwargs):
     '''
     This method query for the registered applications within a Actifio applaince. You can specify a combination of following filter attributes.
 
@@ -411,7 +415,7 @@ class Actifio:
       :isclustered: Specifies if the application is part of a cluster.
       :networkip: The network IP of the application
       :networkname: The network name of the application.
-      :originalappid: Original application id.      
+      :originalappid: Original application id.
       :pathname: The path name of the application
       :protectable:  None means you cannot protect it, fully means you can, partial means there is limited support.
       :sourcecluster:  Identifies the original cluster ID for shadow host ( when we create a shadow application or shadow host, this tells us where it originates from).
@@ -423,17 +427,17 @@ class Actifio:
     '''
     try:
       if len(kwargs) > 0:
-        lsapplication_out = self.run_uds_command('info', 'lsapplication',{ 'filtervalue': kwargs })
+        lsapplication_out = self.run_uds_command('info', 'lsapplication', {'filtervalue': kwargs})
       else:
-        lsapplication_out = self.run_uds_command('info', 'lsapplication',{ })
+        lsapplication_out = self.run_uds_command('info', 'lsapplication', {})
     except:
       raise
     else:
-      return ActAppCollection (self, lsapplication_out['result'])
+      return ActAppCollection(self, lsapplication_out['result'])
 
   def get_images(self, **kwargs):
     '''
-    
+
     Queries Actifio appliance with matching backups images as specified by the filter criteria. if no filter criteria specified will return all the backup images.
 
     Args:
@@ -444,7 +448,7 @@ class Actifio:
       :backupdate: Start date [usage: 'backupdate since 24 hours' for backups started since last 24 hours,'backupdate before 7 days' for backups started older than 7 days]
       :backupname: Image name.
       :characteristic: Charchteristic for of backup type (in addition to jobclass [PRIMARY | MOUNT | UNMOUNT | VDISK | CLONE]
-      :consistencydate: consistency date of the backup 
+      :consistencydate: consistency date of the backup
       :consistency-mode: Consistency mode of image (for example, application consistent or crash consistent).
       :expiration: Date and time when this should expire. Images with an enforced retention (including remote images) cannot be expired before they reach the immutability date.
       :hostid: Application ID of the host where the backup image ??? <-- host ID of the capture job host
@@ -454,7 +458,7 @@ class Actifio:
       :mappedhost: ID of the host to which backup image is mapped.
       :mountedhost: ID of host where backup image is mounted.
       :policyname: Name of the policy on which this object is created.
-      :prepdate: Date when LiveClone image is created. 
+      :prepdate: Date when LiveClone image is created.
       :slpname: Profile name used while creating this image.
       :sltname: SLA template name used while creating this image.
       :sourceimage: obsolete
@@ -464,15 +468,15 @@ class Actifio:
 
     Returns:
 
-      Return the backups image collection in ActImgCollection object. 
+      Return the backups image collection in ActImgCollection object.
 
     '''
 
     try:
       if len(kwargs) > 0:
-        lsbackup_out = self.run_uds_command('info', 'lsbackup',{ 'filtervalue': kwargs })
+        lsbackup_out = self.run_uds_command('info', 'lsbackup', {'filtervalue': kwargs})
       else:
-        lsbackup_out = self.run_uds_command('info', 'lsbackup',{ })
+        lsbackup_out = self.run_uds_command('info', 'lsbackup', {})
     except:
       raise
     else:
@@ -492,7 +496,7 @@ class Actifio:
       :expirationdate:
       :hostname:
       :isscheduled:       [ true | false ]
-      :jobclass:          
+      :jobclass:
       :jobname:
       :jobtag:
       :parentid:
@@ -509,17 +513,17 @@ class Actifio:
       :virtualsize:
 
     Returns:
-      
+
       :doc:`ActJobCollection </actjobcollection>` object with a collection of jobs as per the selection criteria.
 
     '''
     try:
-      lsjob_out = self.run_uds_command('info', 'lsjob',{ 'filtervalue': kwargs })
-      lsjobhist_out = self.run_uds_command('info', 'lsjobhistory',{ 'filtervalue': kwargs })
+      lsjob_out = self.run_uds_command('info', 'lsjob', {'filtervalue': kwargs})
+      lsjobhist_out = self.run_uds_command( 'info', 'lsjobhistory', {'filtervalue': kwargs})
     except:
       raise
     else:
-      return ActJobsCollection ( self, lsjob_out['result'] + lsjobhist_out['result'] )
+      return ActJobsCollection(self, lsjob_out['result'] + lsjobhist_out['result'])
 
   def get_image_bytime(self, application, restoretime, strict_policy=False, job_class="snapshot"):
     """
@@ -528,7 +532,7 @@ class Actifio:
     Args:
 
       :application: should be the application in the form of ActApplication object.
-      :strict_policy: [True | False] If set to true, the image will be selected from log recovery range, with the closest image to replay the logs on.  
+      :strict_policy: [True | False] If set to true, the image will be selected from log recovery range, with the closest image to replay the logs on.
       :restoretime: can be datetime obect or string with the format [YYYY-MM-DD HH:mm:ss] job_class: Defaults to snapshot. Should be string type, to any supported image jobclass.
 
     Returns:
@@ -567,7 +571,7 @@ class Actifio:
           viable_images = self.get_images(appid=application.id, consistencydate=">" + ls_image.beginpit, jobclass=job_class)
         except:
           raise
-      
+
       prefered_image = None
       prefered_image_time = None
 
@@ -584,7 +588,7 @@ class Actifio:
           if prefered_image_time < consistency_time < restore_time:
             prefered_image = img
             prefered_image_time = consistency_time
-      
+
       return prefered_image
     else:
       try:
@@ -601,7 +605,7 @@ class Actifio:
           consistency_time = datetime.strptime(img.consistencydate[:-4], timeformat)
         except:
           raise
-        
+
         if prefered_image is None:
           # print("processing first image")
           prefered_image = img
@@ -645,7 +649,7 @@ class Actifio:
       *Miscelaneous Parameters*
 
       :restoretime: Point in time the database needs to be recovered to.
-      :strict_policy: Defaults to True, If set to True (only for applications with log database backups), :databases will be cloned to the time specified. 
+      :strict_policy: Defaults to True, If set to True (only for applications with log database backups), :databases will be cloned to the time specified.
       :nowait: defaults to True, if True, this method will be non-blocking mode.
 
       *Oracle Related Parameters*
@@ -662,7 +666,7 @@ class Actifio:
       :oracle_recover_dest_size (optional): Oracle Parameter db_recover_dest_size. Defaults to 5000
       :oracle_diagnostic_dest (optional): Oracle Diagnostic Destination
       :oracle_nprocs (optional): Num of Max processes
-      :oracle_open_cursors (optional): Number of open_cursors. defaults to 1000 
+      :oracle_open_cursors (optional): Number of open_cursors. defaults to 1000.
       :oracle_char_set (optional): Characterset. Defaults to 'AL32UTF8'
       :oracle_tns_ip (optional): TNS IP Address
       :oracle_tns_port (optional): TNS Port
@@ -677,49 +681,50 @@ class Actifio:
       :sql_instance_name (required): Target SQL Server instance name
       :sql_recover_userlogins (optional): Recover user logins of the database. Defaults to FALSE
       :sql_username (optional): Username for database provisioning
-      :sql_password (optional): Password for the specified user 
+      :sql_password (optional): Password for the specified user
 
       *SQLServer DB Application*
 
-      :sql_db_name (reuired): Database name at the target instance. (Only required if the source application is database or single database mount from instance.) 
+      :sql_db_name (reuired): Database name at the target instance. (Only required if the source application is database or single database mount from instance.)
 
       *SQLServer Instance*
 
-      :sql_source_dbnames (required): Source database names if the source application is SQL instance. Use ',' as delimiter for multiple databases. (Only required if the source application is SQL server instance.) 
+      :sql_source_dbnames (required): Source database names if the source application is SQL instance. Use ',' as delimiter for multiple databases. (Only required if the source application is SQL server instance.)
       :sql_cg_name (required): Consistency group name. (Only required if the source application is SQL Server instance and mount multiple databases at a time.)
       :sql_dbname_prefix (optional): Prefix of database name for multiple database mount
       :sql_dbname_suffix (optional): Suffix of database name for multiple database mount
 
     Returns:
 
-      This method returns a tuple of (ActJob,ActImage), respectively the resulting Job and Image. 
+      This method returns a tuple of (ActJob,ActImage), respectively the resulting Job and Image.
 
     '''
-    # parse kwargs 
+    # parse kwargs
 
-    kwarg_map = { 
-    'orahome': 'oracle_home',
-    'username': 'oracle_username',
-    'databasesid': 'oracle_db_name',
-    'tnsadmindir': 'oracle_tns_admin',
-    'totalmemory': 'oracle_db_mem',
-    'sgapct': 'oracle_sga_pct',
-    'redosize': 'oracle_redo_size',
-    'shared_pool_size': 'oracle_shared_pool',
-    'db_cache_size': 'oracle_db_cache_size',
-    'db_recovery_file_dest_size': 'oracle_recover_dest_size',
-    'diagnostic_dest': 'oracle_diagnostic_dest',
-    'processes': 'oracle_nprocs',
-    'open_cursors': 'oracle_open_cursors',
-    'characterset': 'oracle_char_set',
-    'tnsip': 'oracle_tns_ip',
-    'tnsport': 'oracle_tns_port',
-    'tnsdomain': 'oracle_tns_domain',
-    'nonid': 'oracle_no_nid',
-    'notnsupdate': 'oracle_no_tns_update',
-    'rrecovery': 'oracle_restore_recov',
-    'standalone': 'oracle_no_rac' }
-      
+    kwarg_map = {
+      'orahome': 'oracle_home',
+      'username': 'oracle_username',
+      'databasesid': 'oracle_db_name',
+      'tnsadmindir': 'oracle_tns_admin',
+      'totalmemory': 'oracle_db_mem',
+      'sgapct': 'oracle_sga_pct',
+      'redosize': 'oracle_redo_size',
+      'shared_pool_size': 'oracle_shared_pool',
+      'db_cache_size': 'oracle_db_cache_size',
+      'db_recovery_file_dest_size': 'oracle_recover_dest_size',
+      'diagnostic_dest': 'oracle_diagnostic_dest',
+      'processes': 'oracle_nprocs',
+      'open_cursors': 'oracle_open_cursors',
+      'characterset': 'oracle_char_set',
+      'tnsip': 'oracle_tns_ip',
+      'tnsport': 'oracle_tns_port',
+      'tnsdomain': 'oracle_tns_domain',
+      'nonid': 'oracle_no_nid',
+      'notnsupdate': 'oracle_no_tns_update',
+      'rrecovery': 'oracle_restore_recov',
+      'standalone': 'oracle_no_rac'
+    }
+
     def __parse_kwargs(key):
       try:
         if kwargs[kwarg_map[key]] != "":
@@ -742,7 +747,7 @@ class Actifio:
         raise ActUserError("'strict_policy' should be boolean")
     except KeyError:
       strict_policy = False
-    
+
     # restore time validation routines (same as get_image_bytime)
     from datetime import datetime
     timeformat = "%Y-%m-%d %H:%M:%S"
@@ -759,8 +764,8 @@ class Actifio:
       raise ActUserError("'restoretime' should be in the type of datetime or string with format of [YYYY-MM-DD HH:mm:ss]")
 
     try:
-      source_application = self.get_applications(appname=source_appname,hostname=source_hostname,apptype="not VMBackup")
-    except Exception as e:
+      source_application = self.get_applications(appname=source_appname, hostname=source_hostname, apptype="not VMBackup")
+    except:
       raise
 
     if len(source_application) < 1:
@@ -770,46 +775,46 @@ class Actifio:
     mountimage_args = {}
     # if source_application[0].appclass == "Oracle":
     try:
-      app_parameters = self.run_uds_command("info","lsappclass",{ "name": source_application[0].appclass } )
+      app_parameters = self.run_uds_command("info", "lsappclass", {"name": source_application[0].appclass})
     except:
       raise
-    
+
     # print(type(app_parameters))
     for param in app_parameters['result']:
       if __parse_kwargs(param['name']) is not None:
         provisioningoptions += "<" + str(param['name']) + ">" + __parse_kwargs(param['name']) + "</" + str(param['name']) + ">"
     if source_application[0].appclass == "SQLServerGroup":
-      if __parse_kwargs("sql_source_dbnames") is not None and len(__parse_kwargs("sql_source_dbnames").split(',')) == 1 :
+      if __parse_kwargs("sql_source_dbnames") is not None and len(__parse_kwargs("sql_source_dbnames").split(',')) == 1:
         provisioningoptions += "<dbname>" + __parse_kwargs("sql_source_dbnames") + "</dbname>"
 
     provisioningoptions = "<provisioningoptions>" + provisioningoptions + "</provisioningoptions>"
 
     # print(provisioningoptions)
-    
-    mountimage_args.__setitem__('restoreoption',{ 'provisioningoptions': provisioningoptions })
+
+    mountimage_args.__setitem__('restoreoption', {'provisioningoptions': provisioningoptions})
 
     try:
       target_host = self.get_hosts(hostname=target_hostname)
-    except ActAPIError as e:
+    except:
       raise
 
     if len(target_host) != 1:
-      raise ActUserError ("Unable to find the specified 'target_hostname': " + target_hostname)
-    
+      raise ActUserError("Unable to find the specified 'target_hostname': " + target_hostname)
+
     mountimage_args.__setitem__('host', target_host[0].id)
 
     # get the image by recovery time
 
-    if restoretime =="":
+    if restoretime == "":
       mountimage_args.__setitem__('appid', source_application[0].id)
     else:
       try:
-        mount_image = self.get_image_bytime(source_application[0],restoretime, strict_policy)
+        mount_image = self.get_image_bytime(source_application[0], restoretime, strict_policy)
       except:
         raise
       else:
         mountimage_args.__setitem__('image', str(mount_image))
-    
+
     # handling no wait
 
     try:
@@ -822,22 +827,22 @@ class Actifio:
 
     if kwargs_nowait:
       mountimage_args.__setitem__('nowait', None)
- 
+
     # mountimage steps
     # print (mountimage_args)
     mountimage_out = self.run_uds_command("task", "mountimage", mountimage_args)
 
     result_job_name = mountimage_out['result'].split(" ")[0]
     result_image_name = mountimage_out['result'].split(" ")[3]
-        
+
     return (self.get_jobs(jobname=result_job_name)[0], self.get_images(backupname=result_image_name))
 
-  def simple_mount(self,source_application=None, target_host=None, mount_image=None, 
-  restoretime="", strict_policy=False, pre_script="",post_script="", nowait=True, 
-  job_class="snapshot", label="Python Library", **kwargs):
+  def simple_mount(self, source_application=None, target_host=None, mount_image=None,
+  restoretime="", strict_policy=False, pre_script="", post_script="", nowait=True,
+  job_class="snapshot", mount_mode="", label="Python Library", **kwargs):
     """
 
-    This method mounts a simple mount operation, for a application type. This mount will not create a 
+    This method mounts a simple mount operation, for a application type. This mount will not create a
     virtual clone (if you need to create a virtual clone look into clone_database() instead).
 
     Args:
@@ -850,7 +855,7 @@ class Actifio:
 
       :source_hostname (required): hostname where the server was backed up from.
       :source_appname (required): name of the application
-      
+
       *Else*
 
       :source_application (required): ActApplication object refereing to source application
@@ -863,15 +868,15 @@ class Actifio:
 
       :target_host (required): ActHost object refering to the target host
 
-      :restoretime (optional): recovery time of the mount image, depending on the strict_policy, the closest image will be selected. 
+      :restoretime (optional): recovery time of the mount image, depending on the strict_policy, the closest image will be selected.
       :strict_policy (optional): Boolean, defaults to False, if True, application is treated as transaction log capable and image is selected to a level where recoverable to restoretime. Else closest image to the time will be selected
 
       :pre_script (optional): Pre Script for the mount operation
       :post-script (optional): Post Script for the mount operation
-      :nowait (optional): defaults to True, mount job will not wait till the completion, if False, 
+      :nowait (optional): defaults to True, mount job will not wait till the completion, if False,
                          this method will be blocking until the job completion.
-      :job_class (optional): Defaults to "snapshot", valid jobclasses are, [ snapshot | dedup | 
-                            dedupasync | OnVault ]          
+      :job_class (optional): Defaults to "snapshot", valid jobclasses are, [ snapshot | dedup |
+                            dedupasync | OnVault ]
       :mount_mode (optional): Takes the value, physical (pRDM), independentvirtual (vRDM), or nfs (requires 9.0)
       :maptoallesxhosts (optional): Defaults to False. Map to all the ESXi hosts in the cluster.
 
@@ -879,63 +884,56 @@ class Actifio:
 
       Any of the restoreoptions as listed in the **udsinfo lsrestoreoptions** can be specified as key=value command arguments.
 
-      .. note:: For more information on the restore options refer to the Appendix F on the RESTfulAPI.pdf. 
+      .. note:: For more information on the restore options refer to the Appendix F on the RESTfulAPI.pdf.
 
     Returns:
 
-      This method returns a tuple of (ActJob,ActImage), respectively the resulting Job and Image. 
+      This method returns a tuple of (ActJob,ActImage), respectively the resulting Job and Image.
 
 
       returns a Tuple with (ActJob , ActImage):
 
-  
-    """    
+
+    """
 
     mountimage_args = {}
 
     if source_application is None:
-      if source_appname != "" and source_hostname != "":
-        apps_list = self.get_applications(appname=source_appname,hostname=source_hostname,friendlytype=source_appclass)
-        if len(apps_list) == 1:
-          source_application = apps_list[0]
-        else:
-          raise ActUserError("'source_appname' and 'source_hostname' could not be found." )
-      else:
-        raise ActUserError("'source_appname' and 'source_hostname' is required when 'source_application' is not specified.")
+      raise ActUserError("'source_application' is not specified.")
 
     if restoretime == "":
       mountimage_args.__setitem__('appid', source_application.id)
       # still we need a image to generate the restoreoptions
-      mount_image = self.get_images(appid=source_application.id)[0] 
+      mount_image = self.get_images(appid=source_application.id)[0]
       # TODO: This is a costly approch to get a single image. Need to come up with a better
-      # approach  
+      # approach
     else:
       if mount_image is None:
-        mount_image = self.get_image_bytime(source_application,restoretime,strict_policy,job_class)
+        mount_image = self.get_image_bytime(source_application, restoretime, strict_policy, job_class)
 
         if mount_image is None:
           raise ActUserError("Unable to find a suitable image for the 'restoretime' and 'strict_policy' criteria.")
 
-      mountimage_args.__setitem__('image',mount_image.imagename)
-    
-    if isinstance(target_host,ActHost):
-      mountimage_args.__setitem__('host',target_host.id)
+      mountimage_args.__setitem__('image', mount_image.imagename)
+
+    if isinstance(target_host, ActHost):
+      mountimage_args.__setitem__('host', target_host.id)
     else:
       raise ActUserError("'target_host' need to be specified and ecpects ActHost object")
 
     if nowait:
       mountimage_args.__setitem__('nowait', None)
-    
+
     script_data = []
 
     if pre_script != "":
       script_data.append('name='+pre_script+':phase=PRE')
-    
+
     if post_script != "":
       script_data.append('name='+post_script+':phase=POST')
-    
+
     if len(script_data) != 0:
-      mountimage_args.__setitem__('script',';'.join(script_data))
+      mountimage_args.__setitem__('script', ';'.join(script_data))
 
     if mount_mode in ['physical', 'independentvirtual', 'nfs']:
       if self._minimum_version("9.0.0.0"):
@@ -958,13 +956,13 @@ class Actifio:
       kwargs_opt = kwargs.get(opt.name)
       if kwargs_opt is not None:
         restoreopts_data.append(opt.name + "-" +  + "=" + str(kwargs_opt))
-    
-    if len(restoreopts_data) != 0:
-      mountimage_args.__setitem__('restoreoption',','.join(restoreopts_data))
 
-    mountimage_out = self.run_uds_command('task','mountimage',mountimage_args)
+    if len(restoreopts_data) != 0:
+      mountimage_args.__setitem__('restoreoption', ','.join(restoreopts_data))
+
+    mountimage_out = self.run_uds_command('task', 'mountimage', mountimage_args)
 
     result_job_name = mountimage_out['result'].split(" ")[0]
     result_image_name = mountimage_out['result'].split(" ")[3]
-        
+
     return (self.get_jobs(jobname=result_job_name)[0], self.get_images(backupname=result_image_name)[0])
