@@ -876,7 +876,7 @@ class Actifio:
       :nowait (optional): defaults to True, mount job will not wait till the completion, if False,
                          this method will be blocking until the job completion.
       :job_class (optional): Defaults to "snapshot", valid jobclasses are, [ snapshot | dedup |
-                            dedupasync | OnVault ]
+                            dedupasync | OnVault ]. job_class is applicable only when the restoretime is specified.
       :mount_mode (optional): Takes the value, physical (pRDM), independentvirtual (vRDM), or nfs (requires 9.0)
       :maptoallesxhosts (optional): Defaults to False. Map to all the ESXi hosts in the cluster.
 
