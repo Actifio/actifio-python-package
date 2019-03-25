@@ -16,7 +16,7 @@ elif sys.version[0] == "3":
 
 __metaclass__ = type
 
-class ActObjec():
+class ActObject():
   def __init__(self, appliance, objectData, printable, uniqueid):
     """
     Initiator forthe ActObjeect. This will be a base class for all the other Actifio Object types
