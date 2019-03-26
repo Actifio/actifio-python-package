@@ -136,7 +136,8 @@ class Actifio:
     # create the https poolmanager
     cert_str = 'CERT_REQUIRED' if cert_validation else 'CERT_NONE'
 
-    self._httppool = urllib3.HTTPSConnectionPool(host=appliance, port=443, cert_reqs=cert_str)
+    timeout = urllib3.util.timeout.Timeout(connect=5.0)
+    self._httppool = urllib3.HTTPSConnectionPool(host=appliance, port=443, cert_reqs=cert_str, timeout=timeout)
 
   def __str__(self):
     if Actifio._sessionid[self.appliance][self.username] == "":
