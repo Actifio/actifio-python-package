@@ -12,7 +12,7 @@ pip install Actifio
 
 # Documentation
 
-You can find the documentation [here] (https://actifio-python-client-library.readthedocs.io/en/latest/index.html).
+You can find the documentation [here](https://actifio-python-client-library.readthedocs.io/en/latest/index.html).
 
 License
 -------
