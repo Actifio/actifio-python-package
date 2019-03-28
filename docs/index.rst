@@ -46,7 +46,7 @@ This will ensure all the dependencies are managed and installed with the Actifio
 Geting started!!!
 =================
 
-On design philosophy of this library is to make sure that the user experience is consistent to the actual product. First you can import the module by:
+By design philosophy of this library is to make sure that the user experience is consistent to the actual product. First you can import the module by:
 
 .. code-block:: python
 
@@ -75,7 +75,7 @@ List all the hosts, for example:
 
   hosts = appliance.get_hosts(hostname="my_host", isvm="true")
 
-Or find a application:
+Or find an application:
 
 .. code-block:: python
 
