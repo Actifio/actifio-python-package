@@ -1,4 +1,9 @@
 import unittest
+import os
+import sys
+sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath('..'))
+
 from Actifio import Actifio 
 from Actifio.actexceptions import *
 
@@ -53,6 +58,43 @@ class ExceptionTesting(unittest.TestCase):
     with self.assertRaises(ActAPIError) as excp:
       act = Actifio(appliance, user, password)
       act.run_uds_command('xxx', 'lsversion', {})
+
+  def test_get_image_bytime_args(self):
+    act = Actifio(appliance, user, password)
+    oracleapp = act.get_applications(appname=oracle_db, hostname=ora_source, appclass="Oracle")
+    sqlapp = act.get_applications(appname=sql_db, hostname=sql_source, appclass="SQLServer")
+    nonlsapp = act.get_applications(friendlytype="VMBackup")
+
+    # incorrect restoretime format in string
+    with self.assertRaises(ActUserError) as excp:
+      from datetime import datetime      
+      act.get_image_bytime(
+        application=oracleapp[0], 
+        restoretime="03-12-2234 00:00:00",
+        strict_policy=True 
+        )
+    self.assertEqual(excp.exception.msg, "'restoretime' need to be in the format of [YYYY-MM-DD HH:mm:ss]")
+
+    # strict_policy with non LogSmart app
+    with self.assertRaises(ActUserError) as excp:
+      from datetime import datetime      
+      act.get_image_bytime(
+        application=nonlsapp[0], 
+        restoretime=datetime.today(),
+        strict_policy=True 
+        )
+    self.assertEqual(excp.exception.msg, "'strict_policy=True' is only valid for LogSmart enables applications. This application is not LogSmart enabled.")
+
+    # restoretime can't be empty
+    with self.assertRaises(ActUserError) as excp:
+      from datetime import datetime      
+      act.get_image_bytime(
+        application=oracleapp[0], 
+        restoretime="",
+        strict_policy=True 
+        )
+    self.assertEqual(excp.exception.msg, "'restoretime' should be in the type of datetime or string with format of [YYYY-MM-DD HH:mm:ss]")
+
 
 if __name__ == "__main__":
   unittest.main()
