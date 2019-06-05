@@ -288,7 +288,7 @@ class Actifio:
         'GET' if cmdType == 'info' else 'POST',
         _URI
       )
-      # print(_URI)
+      print(_URI)
     except Exception as e:
       # print (e)
       raise ActConnectError("Failed to connect the appliance")
@@ -636,7 +636,9 @@ class Actifio:
 
       return prefered_image
 
-  def clone_database(self, source_hostname, source_appname, target_hostname, restoretime="", strict_policy=True, **kwargs):
+  def clone_database(self, source_hostname="", source_appname="", source_application=None, 
+  target_hostname="", target_host=None, restoretime="", strict_policy=True, pre_script="", post_script="",
+  nowait=True, **kwargs):
     '''
 
     This method creates a virtual clone of Oracle or SQL server database.
@@ -702,7 +704,9 @@ class Actifio:
     '''
     # parse kwargs
 
-    kwarg_map = {
+    kwarg_map = {}
+    
+    kwarg_map.__setitem__('oracle', {
       'orahome': 'oracle_home',
       'username': 'oracle_username',
       'databasesid': 'oracle_db_name',
@@ -724,30 +728,23 @@ class Actifio:
       'notnsupdate': 'oracle_no_tns_update',
       'rrecovery': 'oracle_restore_recov',
       'standalone': 'oracle_no_rac'
-    }
+    })
 
-    def __parse_kwargs(key):
-      try:
-        if kwargs[kwarg_map[key]] != "":
-          return kwargs[kwarg_map[key]]
-      except KeyError:
-        if key == "username":
-          return "oracle"
-        elif key == "tnsadmindir":
-          return kwargs['oracle_home']+"/network/admin"
-        else:
-          return None
-      except:
-        raise
+    kwarg_map.__setitem__('sql', {
+      'sqlinstance': 'sql_instance_name',
+      'userlogins': 'sql_recover_userlogins',
+      'username': 'sql_username',
+      'password': 'sql_password',
+      'ConsistencyGroupName': 'sql_cg_name',
+      'dbnameprefix': 'sql_dbname_prefix',
+      'dbnamesuffix': 'sql_dbname_suffix'
+    })
 
     # Strict policy
-    try:
-      if isinstance(kwargs['strict_policy'], bool):
-        strict_policy = kwargs['strict_policy']
-      else:
-        raise ActUserError("'strict_policy' should be boolean")
-    except KeyError:
+    if strict_policy is None:
       strict_policy = False
+    elif not isinstance(strict_policy, bool):
+      raise ActUserError("'strict_policy' should be boolean")
 
     # restore time validation routines (same as get_image_bytime)
     from datetime import datetime
@@ -764,29 +761,84 @@ class Actifio:
     else:
       raise ActUserError("'restoretime' should be in the type of datetime or string with format of [YYYY-MM-DD HH:mm:ss]")
 
-    try:
-      source_application = self.get_applications(appname=source_appname, hostname=source_hostname, apptype="not VMBackup")
-    except:
-      raise
+    if source_application is None:
+      if source_appname != "" and source_hostname != "":
+        try:
+          source_apps = self.get_applications(appname=source_appname, hostname=source_hostname, apptype="not VMBackup")
+        except:
+          raise
+        else:
+          if len(source_apps) != 1:
+            raise ActUserError("Unable to find the 'source_application' application: " + source_application)
+          else:
+            source_application = source_apps[0]
+      else:
+        raise ActUserError("'source_application' or 'source_appname' and 'source_hostname' need to be specified.")
+    elif not isinstance(source_application, ActApplication):
+      raise ActUserError("'source_application' need to be ActApplication type.")
 
-    if len(source_application) < 1:
-      raise ActUserError("Unable to find the 'source_application' application: " + source_application)
+    if not source_application.appclass in ['Oracle', 'SQLServer', 'SQLServerGroup']:
+      raise ActUserError("'source_application' need to be in Orace, SQLServer or SQLServerGroup appclass.")
+
+    script_data = []
+
+    if pre_script != "":
+      script_data.append('name='+pre_script+':phase=PRE')
+
+    if post_script != "":
+      script_data.append('name='+post_script+':phase=POST')
+
+    if len(script_data) != 0:
+      mountimage_args.__setitem__('script', ';'.join(script_data))
+
+  # Oracle required arguments
+    if source_application.appclass == "Oracle":
+      for ora_reqd in ['oracle_home', 'oracle_db_name']:
+        if kwargs.get(ora_reqd) is None:
+          raise ActUserError("Required argument is missing: " + ora_reqd)
+  # SQLServer Arguments
+    if source_application.appclass == "SQLServer":
+      for sql_reqd in ['sql_instance_name', 'sql_db_name']:
+        if kwargs.get(sql_reqd) is None:
+          raise ActUserError("Required argument is missing: " + sql_reqd)
+  # SQLServerGroup Arguments
+    if source_application.appclass == "SQLServerGroup":
+      for sqlg_reqd in ['sql_source_dbnames', 'sql_cg_name']:
+        if kwargs.get(sqlg_reqd) is None:
+          raise ActUserError("Required argument is missing: " + sqlg_reqd)
 
     provisioningoptions = ""
     mountimage_args = {}
     # if source_application[0].appclass == "Oracle":
     try:
-      app_parameters = self.run_uds_command("info", "lsappclass", {"name": source_application[0].appclass})
+      app_parameters = source_application.provisioningoptions()
     except:
       raise
 
     # print(type(app_parameters))
-    for param in app_parameters['result']:
-      if __parse_kwargs(param['name']) is not None:
-        provisioningoptions += "<" + str(param['name']) + ">" + __parse_kwargs(param['name']) + "</" + str(param['name']) + ">"
-    if source_application[0].appclass == "SQLServerGroup":
-      if __parse_kwargs("sql_source_dbnames") is not None and len(__parse_kwargs("sql_source_dbnames").split(',')) == 1:
-        provisioningoptions += "<dbname>" + __parse_kwargs("sql_source_dbnames") + "</dbname>"
+    for param in app_parameters:
+      if source_application.appclass == "Oracle":
+        kwarg_key = kwarg_map['oracle'].get(param.name)
+        if kwarg_key is not None:
+          arg_value = kwargs.get(kwarg_key)
+        else: 
+          arg_value = None
+        if param.name == "username" and arg_value is None:
+          arg_value = "oracle"
+      elif source_application.appclass in ['SQLServer', 'SQLServerGroup']:
+        kwarg_key = kwarg_map['sql'].get(param.name)
+        if kwarg_key is not None:
+          arg_value = kwargs.get(kwarg_key)
+        else: 
+          arg_value = None
+      if arg_value is not None:
+        provisioningoptions += "<" + param.name + ">" + arg_value + "</" + param.name + ">"
+
+    dbnames = kwargs.get("sql_source_dbnames")
+    if dbnames is not None and len(dbnames.split(',')) == 1:
+      provisioningoptions += "<dbname>" + dbnames + "</dbname>"
+    else:
+      mountimage_args.__setitem__('parts', dbnames)
 
     provisioningoptions = "<provisioningoptions>" + provisioningoptions + "</provisioningoptions>"
 
@@ -795,22 +847,22 @@ class Actifio:
     mountimage_args.__setitem__('restoreoption', {'provisioningoptions': provisioningoptions})
 
     try:
-      target_host = self.get_hosts(hostname=target_hostname)
+      target_host = self.get_hosts(hostname=target_hostname)[0]
     except:
       raise
 
     if len(target_host) != 1:
       raise ActUserError("Unable to find the specified 'target_hostname': " + target_hostname)
 
-    mountimage_args.__setitem__('host', target_host[0].id)
+    mountimage_args.__setitem__('host', target_host.id)
 
     # get the image by recovery time
 
     if restoretime == "":
-      mountimage_args.__setitem__('appid', source_application[0].id)
+      mountimage_args.__setitem__('appid', source_application.id)
     else:
       try:
-        mount_image = self.get_image_bytime(source_application[0], restoretime, strict_policy)
+        mount_image = self.get_image_bytime(source_application, restoretime, strict_policy)
       except:
         raise
       else:
@@ -836,11 +888,11 @@ class Actifio:
     result_job_name = mountimage_out['result'].split(" ")[0]
     result_image_name = mountimage_out['result'].split(" ")[3]
 
-    return (self.get_jobs(jobname=result_job_name)[0], self.get_images(backupname=result_image_name))
+    return (self.get_jobs(jobname=result_job_name)[0], self.get_images(backupname=result_image_name)[0])
 
   def simple_mount(self, source_application=None, target_host=None, mount_image=None,
   restoretime="", strict_policy=False, pre_script="", post_script="", nowait=True,
-  job_class="snapshot", mount_mode="", label="Python Library", **kwargs):
+  job_class="snapshot", mount_mode="nfs", label="Python Library", **kwargs):
     """
 
     This method mounts a simple mount operation, for a application type. This mount will not create a
@@ -883,6 +935,9 @@ class Actifio:
 
       *Restore Options*
 
+      :vm_name (optional): For a new vm, VM name.
+      :vm_poweron (optional): Defaults to False. Poweron the VM upon mount.
+
       Any of the restoreoptions as listed in the **udsinfo lsrestoreoptions** can be specified as key=value command arguments.
 
       .. note:: For more information on the restore options refer to the Appendix F on the RESTfulAPI.pdf.
@@ -890,10 +945,6 @@ class Actifio:
     Returns:
 
       This method returns a tuple of (ActJob,ActImage), respectively the resulting Job and Image.
-
-
-      returns a Tuple with (ActJob , ActImage):
-
 
     """
 
@@ -907,7 +958,7 @@ class Actifio:
       # still we need a image to generate the restoreoptions
       mount_image = self.get_images(appid=source_application.id)[0]
       # TODO: This is a costly approch to get a single image. Need to come up with a better
-      # approach
+        # approach
     else:
       if mount_image is None:
         mount_image = self.get_image_bytime(source_application, restoretime, strict_policy, job_class)
@@ -918,7 +969,11 @@ class Actifio:
       mountimage_args.__setitem__('image', mount_image.imagename)
 
     if isinstance(target_host, ActHost):
-      mountimage_args.__setitem__('host', target_host.id)
+      if source_application.friendlytype == "VMBackup":
+        if target_host.hosttype == "esxhost":
+          mountimage_args.__setitem__('esxhost', target_host.id)
+        else:
+          mountimage_args.__setitem__('host', target_host.id)
     else:
       raise ActUserError("'target_host' need to be specified and ecpects ActHost object")
 
@@ -936,7 +991,7 @@ class Actifio:
     if len(script_data) != 0:
       mountimage_args.__setitem__('script', ';'.join(script_data))
 
-    if mount_mode in ['physical', 'independentvirtual', 'nfs']:
+    if mount_mode != "" and mount_mode in ['physical', 'independentvirtual', 'nfs']:
       if self._minimum_version("9.0.0.0"):
         mountimage_args.__setitem__('rdmmode', mount_mode)
       else:
@@ -946,6 +1001,17 @@ class Actifio:
           sys.stderr.write("RDM Mode for nfs requires minimum Actifio 9.0.0\n")
     else:
       raise ActUserError("'mount_mode' should be from ['physical', 'independentvirtual', 'nfs']")
+
+    if source_application.friendlytype == "VMBackup":
+      vm_name = kwargs.get("vm_name")
+      if vm_name is not None:
+        mountimage_args.__setitem__('vmname', vm_name)
+      poweronvm = kwargs.get("vm_poweron")
+      if poweronvm is not None:
+        if poweronvm:
+          mountimage_args.__setitem__('poweronvm', None)
+        elif not isinstance(poweronvm, bool):
+          raise ActUserError("'vm_poweron' should be a boolean")
 
     # get the list of restore options
 
@@ -967,3 +1033,39 @@ class Actifio:
     result_image_name = mountimage_out['result'].split(" ")[3]
 
     return (self.get_jobs(jobname=result_job_name)[0], self.get_images(backupname=result_image_name)[0])
+
+  def unmount_image (self, image=None, delete=True, nowait=True, pre_script="", post_script=""):
+    '''
+    Unmount a mounted image.
+    
+    Args:
+
+      :image: ActImage object of the mounted image. This could be a return object from Actifio.simple_mount or Actifio.clone_database methods.
+    
+    Return:
+
+      Returns ActJob image with the resulting job
+    '''
+    udsargs = []
+
+    if not isinstance(image, ActImage):
+      raise ActUserError("'image' expected to be ActImage type.")
+    else:
+      udsargs.__setitem__("image", image.backupname)
+
+    udsargs.__setitem__("nowait", "true" if nowait else "false")
+    udsargs.__setitem__("delete", "true" if delete else "false")
+
+    script_data = []
+
+    if pre_script != "":
+      script_data.append('name='+pre_script+':phase=PRE')
+
+    if post_script != "":
+      script_data.append('name='+post_script+':phase=POST')
+
+    if len(script_data) != 0:
+      udsargs.__setitem__('script', ';'.join(script_data))
+
+    udsreturn = self.run_uds_command("task","unmountimage", udsargs)
+

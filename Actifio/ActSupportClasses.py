@@ -101,6 +101,21 @@ class ActRestoreoptionCollection(ActObjCollection):
   def __init__(self, appliance, lsrestoreoptionsdata):
     return super(ActRestoreoptionCollection, self).__init__("restoreoptions", ActRestoreoption, appliance, lsrestoreoptionsdata)
 
+############ Provisining Options Related ##########
+
+class ActProvisiningption(ActObject):
+  def __init__(self, appliance, provoptiondata):
+    super(ActProvisiningption, self).__init__(appliance, provoptiondata, provoptiondata['name'], provoptiondata['name'])
+
+class ActProvisiningptionCollection(ActObjCollection):
+  '''
+  Iterable class of collection of provisioning options.
+
+  '''
+  def __init__(self, appliance, lsappclassdata):
+    return super(ActRestoreoptionCollection, self).__init__("provisionoptions", ActProvisiningption, appliance, lsappclassdata)
+
+
 ############## Hosts Related ######################
 
 class ActHost(ActObject):
@@ -125,6 +140,24 @@ class ActApplication(ActObject):
   def details(self):
     app_details = self.appliance.run_uds_command("info", "lsapplication", {"argument" : self.id})
     self.objectdata = app_details['result'] 
+
+  def provisioningoptions(self):
+    """
+    Retrieve restore options for a ActImage for mount / clone / restore operations
+
+    Args:
+
+      None:
+
+    Returns:
+
+      Returns a ActProvisiningptionCollection object with the relavant provisioning options for this appclass.
+
+    """
+
+    provops_capabilities = self.appliance.run_uds_command ('info', 'lsappclass', {'name': self.appclass})
+
+    return ActRestoreoptionCollection(self, provops_capabilities['result'])
 
 class ActAppCollection(ActObjCollection):
   def __init__(self, appliance, lsapplicationdata):
@@ -177,7 +210,24 @@ class ActImage(ActObject):
     return ActRestoreoptionCollection(self, restoreops_capabilities['result'])
 
   def provisioningoptions(self):
-    pass
+    """
+    Retrieve restore options for a ActImage for mount / clone / restore operations
+
+    Args:
+
+      None:
+
+    Returns:
+
+      Returns a ActProvisiningptionCollection object with the relavant provisioning options for this appclass.
+
+    """
+    self.details()
+
+    provops_capabilities = self.appliance.run_uds_command ('info', 'lsappclass', {'name': self.appclass})
+
+    return ActRestoreoptionCollection(self, provops_capabilities['result'])
+    
 
 class ActImageCollection(ActObjCollection):
   def __init__(self, appliance, lsbackupdata):
