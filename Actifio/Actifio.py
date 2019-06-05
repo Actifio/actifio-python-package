@@ -974,8 +974,10 @@ class Actifio:
           mountimage_args.__setitem__('esxhost', target_host.id)
         else:
           mountimage_args.__setitem__('host', target_host.id)
+      else:
+        mountimage_args.__setitem__('host', target_host.id)
     else:
-      raise ActUserError("'target_host' need to be specified and ecpects ActHost object")
+      raise ActUserError("'target_host' need to be specified and expects ActHost object")
 
     if nowait:
       mountimage_args.__setitem__('nowait', None)
@@ -1041,20 +1043,28 @@ class Actifio:
     Args:
 
       :image: ActImage object of the mounted image. This could be a return object from Actifio.simple_mount or Actifio.clone_database methods.
+      :delete: Delete the image after unmount
+      :nowait: Don't wait for the job completion.
+      :pre_script (optional): Pre Script for the mount operation
+      :post-script (optional): Post Script for the mount operation
     
     Return:
 
       Returns ActJob image with the resulting job
     '''
-    udsargs = []
+    udsargs = {}
+
+    print(type(image))
 
     if not isinstance(image, ActImage):
       raise ActUserError("'image' expected to be ActImage type.")
     else:
-      udsargs.__setitem__("image", image.backupname)
+      udsargs.__setitem__('image', image.backupname)
+      print(image)
+      print(image.objectdata)
 
-    udsargs.__setitem__("nowait", "true" if nowait else "false")
-    udsargs.__setitem__("delete", "true" if delete else "false")
+    udsargs.__setitem__('nowait', "true" if nowait else "false")
+    udsargs.__setitem__('delete', "true" if delete else "false")
 
     script_data = []
 
