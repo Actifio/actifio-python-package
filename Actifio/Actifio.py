@@ -1042,7 +1042,7 @@ class Actifio:
     
     Args:
 
-      :image: ActImage object of the mounted image. This could be a return object from Actifio.simple_mount or Actifio.clone_database methods.
+      :image: ActImage object of the mounted image. 
       :delete: Delete the image after unmount
       :nowait: Don't wait for the job completion.
       :pre_script (optional): Pre Script for the mount operation
