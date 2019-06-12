@@ -124,8 +124,8 @@ class Actifio:
     Actifio._sessionid.update({appliance: {}})
     Actifio._sessionid[appliance].update({ username: ''})
     # compose the login params
-    self._loginParams = "/login?name=" + username
-    self._loginParams += "&password=" + password
+    self._loginParams = "/login?name=" + urlencode_str(username)
+    self._loginParams += "&password=" + urlencode_str(password)
     self._loginParams += "&vendorkey=" + vendorkey
 
     self._loginURI = self._apiBase + self._loginParams
