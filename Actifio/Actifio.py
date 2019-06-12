@@ -102,7 +102,7 @@ class Actifio:
   """
   _sessionid = {}
 
-  def __init__(self, appliance, username, password, cert_validation=False):
+  def __init__(self, appliance, username, password, cert_validation=False, verbose=True):
     """
     Actifio instance:
 
@@ -138,6 +138,7 @@ class Actifio:
 
     timeout = urllib3.util.timeout.Timeout(connect=5.0)
     self._httppool = urllib3.HTTPSConnectionPool(host=appliance, port=443, cert_reqs=cert_str, timeout=timeout)
+    self._verbose = verbose
 
   def __str__(self):
     if Actifio._sessionid[self.appliance][self.username] == "":
@@ -288,7 +289,8 @@ class Actifio:
         'GET' if cmdType == 'info' else 'POST',
         _URI
       )
-      print(_URI)
+      if self._verbose:
+        print(_URI)
     except Exception as e:
       # print (e)
       raise ActConnectError("Failed to connect the appliance")
@@ -344,6 +346,8 @@ class Actifio:
         'GET',
         _URI
       )
+      if self._verbose:
+        print(_URI)      
     except urllib3.exceptions.NewConnectionError:
       raise ActConnectError("Unable to make connection to the appliance")
     else:
@@ -1054,14 +1058,13 @@ class Actifio:
     '''
     udsargs = {}
 
-    print(type(image))
-
     if not isinstance(image, ActImage):
-      raise ActUserError("'image' expected to be ActImage type.")
+      if isinstance(image, str):
+        udsargs.__setitem__('image', image)
+      else:
+        raise ActUserError("'image' expected to be ActImage or string type.")
     else:
       udsargs.__setitem__('image', image.backupname)
-      print(image)
-      print(image.objectdata)
 
     udsargs.__setitem__('nowait', "true" if nowait else "false")
     udsargs.__setitem__('delete', "true" if delete else "false")
