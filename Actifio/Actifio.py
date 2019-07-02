@@ -524,7 +524,7 @@ class Actifio:
     '''
     try:
       lsjob_out = self.run_uds_command('info', 'lsjob', {'filtervalue': kwargs})
-      lsjobhist_out = self.run_uds_command( 'info', 'lsjobhistory', {'filtervalue': kwargs})
+      lsjobhist_out = self.run_uds_command('info', 'lsjobhistory', {'filtervalue': kwargs})
     except:
       raise
     else:
@@ -647,7 +647,7 @@ class Actifio:
 
     This method creates a virtual clone of Oracle or SQL server database.
 
-    Agrs:
+    Args:
 
       :source_hostname: Hostname of the source host where the database was captured from
       :source_appname: source application name, or the database name
@@ -845,9 +845,6 @@ class Actifio:
       mountimage_args.__setitem__('parts', dbnames)
 
     provisioningoptions = "<provisioningoptions>" + provisioningoptions + "</provisioningoptions>"
-
-    # print(provisioningoptions)
-
     mountimage_args.__setitem__('restoreoption', {'provisioningoptions': provisioningoptions})
 
     try:
@@ -915,7 +912,7 @@ class Actifio:
 
       *Else*
 
-      :source_application (required): ActApplication object refereing to source application
+      :source_application (required): ActApplication object referring to source application
 
       *If not target-host is None*
 
@@ -970,7 +967,7 @@ class Actifio:
         if mount_image is None:
           raise ActUserError("Unable to find a suitable image for the 'restoretime' and 'strict_policy' criteria.")
 
-      mountimage_args.__setitem__('image', mount_image.imagename)
+      mountimage_args.__setitem__('image', mount_image.printable)
 
     if isinstance(target_host, ActHost):
       if source_application.friendlytype == "VMBackup":
@@ -1022,19 +1019,18 @@ class Actifio:
     # get the list of restore options
 
     restoreopts = mount_image.restoreoptions('mount', target_host)
-
     restoreopts_data = []
 
     for opt in restoreopts:
       kwargs_opt = kwargs.get(opt.name)
       if kwargs_opt is not None:
-        restoreopts_data.append(opt.name + "-" +  + "=" + str(kwargs_opt))
+        #restoreopts_data.append(opt.name + "-" +  + "=" + str(kwargs_opt))
+        restoreopts_data.append('{}={}'.format(opt.name, str(kwargs_opt)))
 
     if len(restoreopts_data) != 0:
       mountimage_args.__setitem__('restoreoption', ','.join(restoreopts_data))
 
     mountimage_out = self.run_uds_command('task', 'mountimage', mountimage_args)
-
     result_job_name = mountimage_out['result'].split(" ")[0]
     result_image_name = mountimage_out['result'].split(" ")[3]
 
@@ -1080,5 +1076,8 @@ class Actifio:
     if len(script_data) != 0:
       udsargs.__setitem__('script', ';'.join(script_data))
 
-    udsreturn = self.run_uds_command("task","unmountimage", udsargs)
+    udsreturn = self.run_uds_command("task", "unmountimage", udsargs)
+    result_job_name = udsreturn['result'].split(" ")[0]
+
+    return self.get_jobs(jobname=result_job_name)[0]
 
