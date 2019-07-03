@@ -1028,7 +1028,7 @@ class Actifio:
     for opt in restoreopts:
       kwargs_opt = kwargs.get(opt.name)
       if kwargs_opt is not None:
-        restoreopts_data.append(opt.name + "-" +  + "=" + str(kwargs_opt))
+        restoreopts_data.append(opt.name + "=" + str(kwargs_opt))
 
     if len(restoreopts_data) != 0:
       mountimage_args.__setitem__('restoreoption', ','.join(restoreopts_data))
@@ -1082,3 +1082,7 @@ class Actifio:
 
     udsreturn = self.run_uds_command("task","unmountimage", udsargs)
 
+    result_job_name = udsreturn['result'].split(" ")[0]
+
+    return self.get_jobs(jobname=result_job_name)[0]
+    
