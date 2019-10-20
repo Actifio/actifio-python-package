@@ -52,12 +52,45 @@ By design philosophy of this library is to make sure that the user experience is
 
   from Actifio import Actifio
 
+The library supports two modes of authentication, either using username or password, or using token generated locally.
+
+* Username and Password
+-----------------------
 
 With the same information you use to login to the appliance, you can create a appliance object.
 
 .. code-block:: python
 
   appliance = Actifio("myappliance", "my_scripting_user", "super_secret")
+
+Or
+
+* With Token
+------------
+
+You can generate a token using the script in '''bin/''' folder, or using the command. To generate a token:
+
+.. code-block:: python
+
+  $ bin/actgentoken 
+  Username: demo
+  Password: 
+  Confirm password: 
+
+
+
+  ================Token====================
+
+  b'eyAidXNlcm5hbWUiOiAiZGVtbyIsICJwYXNzd29yZCI6ICJkZW1vIiB9\n'
+
+  =========================================
+
+Once the token is generated, appliance object can be instantiated as following:
+
+.. code-block:: python
+
+  appliance = Actifio("myappliance", token=b'eyAidXNlcm5hbWUiOiAiZGVtbyIsICJwYXNzd29yZCI6ICJkZW1vIiB9\n')
+
 
 Once the appliance object is instatiated, we can perform the operations we perform on the applaince.
 
