@@ -6,6 +6,7 @@ import sys
 import json
 from functools import wraps
 import urllib3
+import base64
 
 # import auxialary libraries
 if sys.version [:3] == "2.7":
@@ -42,7 +43,14 @@ class ActEnforce():
   def needs_token(cls, act_func):
     @wraps(act_func)
     def decorated(cls, *args, **kwargs):
-      if Actifio._sessionid[cls.appliance][cls.username] == '':
+      # if session does not exisit
+      if Actifio._sessionid[cls.appliance][cls.username]['sessionid'] == '':
+        try:
+          Actifio._create_session(cls)
+        except:
+          raise
+      # if the exisitng session password different from the password
+      if Actifio._sessionid[cls.appliance][cls.username]['password'] != cls.password:
         try:
           Actifio._create_session(cls)
         except:
@@ -102,7 +110,7 @@ class Actifio:
   """
   _sessionid = {}
 
-  def __init__(self, appliance, username, password, cert_validation=False, verbose=True):
+  def __init__(self, appliance, username='', password='', token='', cert_validation=False, verbose=True):
     """
     Actifio instance:
 
@@ -117,15 +125,35 @@ class Actifio:
     self.__name__ = "Actifio"
     # compose the URI for the API
     self._apiBase = "/actifio/api"
+    if token == '' and username == '':
+      raise ActUserError ("Either 'username' or 'token' required for authentication.")
+    
+    if token != '':
+      try:
+        token_json = json.loads (base64.decodebytes(token))
+      except:
+        raise ActUserError ("Incorrect token format. Use 'act_gentoken' command to generate a authentication token")
+    
+      self.username = token_json["username"]
+      self.password = token_json["password"]
+    else:
+      self.username = username
+      self.password = password
+
     self.appliance = appliance
-    self.username = username
     self.version = 'not_known'
-    #sessionid is unique per user in an appliance
-    Actifio._sessionid.update({appliance: {}})
-    Actifio._sessionid[appliance].update({ username: ''})
+
+    #sessionid is unique per user in an appliance, and this is global 
+    if Actifio._sessionid.get(appliance) == None:
+      Actifio._sessionid.update({appliance: {}})
+    if Actifio._sessionid[appliance].get(self.username) == None:
+      Actifio._sessionid[appliance].update({ self.username: {}})
+      Actifio._sessionid[appliance][self.username].update({ "sessionid": "" })
+      # Actifio._sessionid[appliance][self.username].update({ "password": self.password})
+    
     # compose the login params
-    self._loginParams = "/login?name=" + urlencode_str(username)
-    self._loginParams += "&password=" + urlencode_str(password)
+    self._loginParams = "/login?name=" + urlencode_str(self.username)
+    self._loginParams += "&password=" + urlencode_str(self.password)
     self._loginParams += "&vendorkey=" + vendorkey
 
     self._loginURI = self._apiBase + self._loginParams
@@ -152,12 +180,14 @@ class Actifio:
     Validate the exisiting _sessionid token. Return True if the token is valid.
     """
 
-    if Actifio._sessionid[self.appliance][self.username] == '':
+    if Actifio._sessionid[self.appliance][self.username]["sessionid"] == '':
+      return False
+    if Actifio._sessionid[self.appliance][self.username]["password"] != self.password :
       return False
     try:
       resp = self._httppool.request(
         'GET',
-        self._infoURI + 'lsversion?sessionid=' + Actifio._sessionid[self.appliance][self.username]
+        self._infoURI + 'lsversion?sessionid=' + Actifio._sessionid[self.appliance][self.username]["sessionid"]
       )
     except Exception:
       raise ActConnectError("Unable to reach the appliance: check the IP address / hostname")
@@ -186,7 +216,8 @@ class Actifio:
         raise ActLoginError("This does not seem to be a Actifio Sky/CDS appliance")
       if login.status == 200:
         try:
-          Actifio._sessionid[self.appliance][self.username] = response['sessionid']
+          Actifio._sessionid[self.appliance][self.username]["sessionid"] = response['sessionid']
+          Actifio._sessionid[self.appliance][self.username]["password"] = self.password
         except:
           raise ActLoginError(response['errormessage'])
       elif login.status == 401:
@@ -283,7 +314,7 @@ class Actifio:
       else:
         _URI += urlencode_str(key) + '=' + urlencode_str(str(cmdArgs[key])) + '&'
 
-    _URI += 'sessionid=' + Actifio._sessionid[self.appliance][self.username]
+    _URI += 'sessionid=' + Actifio._sessionid[self.appliance][self.username]["sessionid"]
     try:
       udsout = self._httppool.request (
         'GET' if cmdType == 'info' else 'POST',
@@ -340,7 +371,7 @@ class Actifio:
       else:
         _URI += urlencode_str(key) + '=' + urlencode_str(str(cmdArgs[key])) + '&'
 
-    _URI += 'sessionid=' + Actifio._sessionid[self.appliance][self.username]
+    _URI += 'sessionid=' + Actifio._sessionid[self.appliance][self.username]["sessionid"]
     try:
       sargout = self._httppool.request(
         'GET',
@@ -1004,7 +1035,7 @@ class Actifio:
         if mount_mode == "physical":
           mountimage_args.__setitem__('physicalrdm', None)
         elif mount_mode == "nfs":
-          sys.stderr.write("RDM Mode for nfs requires minimum Actifio 9.0.0\n")
+          raise ActVersionError ("RDM Mode for nfs", "9.0.0")
     else:
       raise ActUserError("'mount_mode' should be from ['physical', 'independentvirtual', 'nfs']")
 
@@ -1073,7 +1104,7 @@ class Actifio:
 
     if pre_script != "":
       script_data.append('name='+pre_script+':phase=PRE')
-
+      
     if post_script != "":
       script_data.append('name='+post_script+':phase=POST')
 
@@ -1086,3 +1117,7 @@ class Actifio:
 
     return self.get_jobs(jobname=result_job_name)[0]
     
+  def failover_database (self, source_application=None, target_host=None, pre_script="", post_script="", mount_mode="physical", label="Python Library", **kwargs):
+    """
+    This method would failover SQL database application from a 
+    """

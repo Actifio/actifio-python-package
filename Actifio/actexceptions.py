@@ -21,3 +21,9 @@ class ActUserError (Exception):
   def __init__(self, msg):
     Exception.__init__(self, "Actifio User Error: " + str(msg))
     self.msg = msg
+
+class ActVersionError (Exception):
+  def __init__(self, object_name, min_version):
+    Exception.__init__(self, "Actifio Version Error: The " + str(object_name) + " is not supported with the current version: min version == " + str(min_version))
+    self.object_name = object_name
+    self.min_version = min_version

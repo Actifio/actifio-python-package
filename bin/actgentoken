@@ -1,0 +1,23 @@
+#!/usr/bin/env python3  
+import getpass
+import base64
+import os
+import sys
+import json
+
+username = input ("Username: ")
+
+password = getpass.getpass(prompt="Password: ")
+
+password2 = getpass.getpass(prompt="Confirm password: ")
+
+if password != password2:
+  print("Passwords do not match.")
+  exit(-1)
+
+token_json = '{ "username": "%s", "password": "%s" }' % (username, password)
+
+token = base64.encodebytes (token_json.encode('ascii'))
+print ("\n\n\n================Token====================\n")
+print(str(token)+'\n')
+print ("=========================================\n")
