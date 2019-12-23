@@ -169,10 +169,10 @@ class Actifio:
     self._verbose = verbose
 
   def __str__(self):
-    if Actifio._sessionid[self.appliance][self.username] == "":
+    if Actifio._sessionid[self.appliance][self.username]["sessionid"] == "":
       return "Connection not verified; Appliance: " + str(self.appliance) + "; Username: " + str(self.username)
     else:
-      return "Connection verified (session id): " + str(Actifio._sessionid[self.appliance][self.username]) + "; Appliance: " + str(self.appliance) + "; Username: " + str(self.username)
+      return "Connection verified (session id): " + str(Actifio._sessionid[self.appliance][self.username]['sessionid']) + "; Appliance: " + str(self.appliance) + "; Username: " + str(self.username)
 
   @staticmethod
   def _validate_token(self):

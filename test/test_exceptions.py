@@ -46,6 +46,12 @@ class ExceptionTesting(unittest.TestCase):
       act.run_uds_command('info', 'lsversion', {})
     self.assertEqual(excp.exception.msg, "This does not seem to be a Actifio Sky/CDS appliance")
 
+  def test_missing_user_token (self):
+    with self.assertRaises(ActLoginError) as excp:
+      act = Actifio(appliance, wrong_user, password)
+      act.run_uds_command('info', 'lsversion', {})
+    self.assertEqual(excp.exception.msg, "Invalid username or password")
+
   def test_wrong_user(self):
     with self.assertRaises(ActLoginError) as excp:
       act = Actifio(appliance, wrong_user, password)
