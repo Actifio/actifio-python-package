@@ -211,7 +211,7 @@ class ActImage(ActObject):
 
   def provisioningoptions(self):
     """
-    Retrieve restore options for a ActImage for mount / clone / restore operations
+    Retrieve restore xoptions for a ActImage for mount / clone / restore operations
 
     Args:
 
@@ -254,18 +254,23 @@ class ActJob(ActObject):
     """
 
     if self.status == 'running' or self.status == 'waiting':
-      try:
-        this_job = self.appliance.run_uds_command('info', 'lsjob', {'filtervalue' : {'jobname': str(self)}})
-      except:
-        pass
-
-      if len(this_job['result']) == 0:
+      while 1:
         try:
-          this_job = self.appliance.run_uds_command('info', 'lsjobhistory', {'filtervalue' : {'jobname': str(self)}})
+          this_job = self.appliance.run_uds_command('info', 'lsjob', {'filtervalue' : {'jobname': str(self)}})
         except:
-          raise
+          pass
+
+        if len(this_job['result']) == 0:
+          try:
+            this_job = self.appliance.run_uds_command('info', 'lsjobhistory', {'filtervalue' : {'jobname': str(self)}})
+          except:
+            raise
+
+          if len(this_job['result']) > 0:
+            break
+
       
-        self.__init__(self.appliance, this_job['result'][0])
+      self.__init__(self.appliance, this_job['result'][0])
 
 
 class ActJobsCollection(ActObjCollection):
