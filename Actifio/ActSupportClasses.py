@@ -268,8 +268,9 @@ class ActJob(ActObject):
 
           if len(this_job['result']) > 0:
             break
+        else:
+          break
 
-      
       self.__init__(self.appliance, this_job['result'][0])
 
 
