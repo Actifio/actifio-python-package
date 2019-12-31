@@ -252,6 +252,7 @@ class ActJob(ActObject):
       None
 
     """
+    from time import sleep
 
     if self.status == 'running' or self.status == 'waiting':
       while 1:
@@ -261,6 +262,7 @@ class ActJob(ActObject):
           pass
 
         if len(this_job['result']) == 0:
+          sleep (1)
           try:
             this_job = self.appliance.run_uds_command('info', 'lsjobhistory', {'filtervalue' : {'jobname': str(self)}})
           except:
