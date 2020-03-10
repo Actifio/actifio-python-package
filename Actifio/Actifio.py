@@ -329,7 +329,7 @@ class Actifio:
       response = json.loads(udsout.data)
       if udsout.status != 200:
         self._lastout = ''
-        raise ActAPIError(response['errormessage'])
+        raise ActAPIError(response['errormessage'], response['errorcode'])
       else:
         self._lastout = response
         return self._lastout
@@ -385,14 +385,14 @@ class Actifio:
       response = json.loads(sargout.data)
       if sargout.status != 200:
         self._lastout = ''
-        raise ActAPIError(response['errormessage'])
+        raise ActAPIError(response['errormessage'], response['errorcode'])
       else:
         self._lastout = response
         return self._lastout
 
   def get_hosts(self, **kwargs):
     '''
-    This method query for the hosts registered in Actifio applaince. You can specify a combination of following filter attributes.
+    This method query for the hosts registered in Actifio appliance. You can specify a combination of following filter attributes.
 
     Attributes:
 
@@ -434,7 +434,7 @@ class Actifio:
 
   def get_applications(self, **kwargs):
     '''
-    This method query for the registered applications within a Actifio applaince. You can specify a combination of following filter attributes.
+    This method query for the registered applications within a Actifio appliance. You can specify a combination of following filter attributes.
 
     Attributes:
 
