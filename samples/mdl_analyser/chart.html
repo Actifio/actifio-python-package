@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
+    <script src="https://code.jquery.com/jquery-3.5.0.min.js" integrity="sha256-xNzN2a4ltkB44Mc/Jz3pT4iU1cmeR0FkXs4pru/JxaQ=" crossorigin="anonymous"></script>
+    <style>
+      canvas {
+        -moz-user-select: none;
+        -webkit-user-select: none;
+        -ms-user-select: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div style="width:100%;">
+      <canvas id="canvas"></canvas>
+    </div>
+    <div id="applist"></div>
+
+    <script>
+ 
+      window.onload = function() {
+        var ctx = document.getElementById('canvas').getContext('2d');
+        $.get("/chartdata", function (data){
+            var config = data;
+            window.myLine = new Chart(ctx, $.parseJSON(data));
+        });
+        // $.get("/applist", function (applist) {
+        //    for (var app in $.parseJSON(applist) {
+        //     $('#applist').
+        //    } 
+        // });
+        // alert("this works too")
+      };
+
+      function label_click () {
+          alert("some one clicked")
+      }
+    </script>
+  </body>
+</html>
