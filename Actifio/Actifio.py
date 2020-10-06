@@ -720,17 +720,26 @@ class Actifio:
       :sql_recover_userlogins (optional): Recover user logins of the database. Defaults to FALSE
       :sql_username (optional): Username for database provisioning
       :sql_password (optional): Password for the specified user
+      :sql_recover_db (optional): Recover database after mount
 
       *SQLServer DB Application*
 
       :sql_db_name (reuired): Database name at the target instance. (Only required if the source application is database or single database mount from instance.)
 
-      *SQLServer Instance*
+      *SQLServer Instance (Single DB)*
+
+      :sql_source_dbnames (required): Source database names if the source application is SQL instance. Use ',' as delimiter for multiple databases. (Only required if the source application is SQL server instance.)
+      :sql_db_name (reuired): Database name at the target instance. (Only required if the source application is database or single database mount from instance.)
+      :sql_dbname_prefix (optional): Prefix of database name for multiple database mount
+      :sql_dbname_suffix (optional): Suffix of database name for multiple database mount
+
+      *SQLServer Instance (Multiple DBs)*
 
       :sql_source_dbnames (required): Source database names if the source application is SQL instance. Use ',' as delimiter for multiple databases. (Only required if the source application is SQL server instance.)
       :sql_cg_name (required): Consistency group name. (Only required if the source application is SQL Server instance and mount multiple databases at a time.)
       :sql_dbname_prefix (optional): Prefix of database name for multiple database mount
       :sql_dbname_suffix (optional): Suffix of database name for multiple database mount
+
 
     Returns:
 
@@ -772,7 +781,8 @@ class Actifio:
       'password': 'sql_password',
       'ConsistencyGroupName': 'sql_cg_name',
       'dbnameprefix': 'sql_dbname_prefix',
-      'dbnamesuffix': 'sql_dbname_suffix'
+      'dbnamesuffix': 'sql_dbname_suffix',
+      'recover': 'sql_recover_db'
     })
 
     # Strict policy
@@ -804,7 +814,7 @@ class Actifio:
           raise
         else:
           if len(source_apps) != 1:
-            raise ActUserError("Unable to find the 'source_application' application: " + source_application)
+            raise ActUserError("Unable to find the 'source_application' application: " + str(source_application))
           else:
             source_application = source_apps[0]
       else:
@@ -836,11 +846,19 @@ class Actifio:
       for sql_reqd in ['sql_instance_name', 'sql_db_name']:
         if kwargs.get(sql_reqd) is None:
           raise ActUserError("Required argument is missing: " + sql_reqd)
-  # SQLServerGroup Arguments
-    if source_application.appclass == "SQLServerGroup":
+  # SQLServerGroup Arguments single DB
+    if source_application.appclass == "SQLServerGroup" \
+       and len(kwargs.get('sql_source_dbnames').split(',')) == 1:
+      for sqlg_reqd in ['sql_source_dbnames', 'sql_db_name']:
+        if kwargs.get(sqlg_reqd) is None:
+          raise ActUserError("Required argument is missing: " + sqlg_reqd)
+  # SQLServerGroup Arguments multiple DBs
+    if source_application.appclass == "SQLServerGroup" \
+      and len(kwargs.get('sql_source_dbnames').split(',')) > 1:
       for sqlg_reqd in ['sql_source_dbnames', 'sql_cg_name']:
         if kwargs.get(sqlg_reqd) is None:
           raise ActUserError("Required argument is missing: " + sqlg_reqd)
+
 
     provisioningoptions = ""
     mountimage_args = {}
@@ -869,12 +887,20 @@ class Actifio:
       if arg_value is not None:
         provisioningoptions += "<" + param.name + ">" + arg_value + "</" + param.name + ">"
 
+# processing partial SQL mounts for SQL Instances, ConsistencyGroups and SQL AG 
     dbnames = kwargs.get("sql_source_dbnames")
-    if dbnames is not None and len(dbnames.split(',')) == 1:
-      provisioningoptions += "<dbname>" + dbnames + "</dbname>"
-    else:
-      mountimage_args.__setitem__('parts', dbnames)
 
+# for SQLServerGroup mounting a single DB    
+    if dbnames is not None and len(dbnames.split(',')) == 1 and source_application.appclass == 'SQLServerGroup':
+      provisioningoptions += "<dbname>" + kwargs.get("sql_db_name") + "</dbname>"
+      mountimage_args.__setitem__('parts', dbnames)
+# for SQLServer DB mounts
+    elif source_application.appclass == 'SQLServer':
+      provisioningoptions += "<dbname>" + kwargs.get("sql_db_name") + "</dbname>"
+# for SQLServerGroup with multiple DBs
+    elif source_application.appclass == 'SQLServerGroup':
+      mountimage_args.__setitem__('parts', dbnames)
+    
     provisioningoptions = "<provisioningoptions>" + provisioningoptions + "</provisioningoptions>"
 
     # print(provisioningoptions)
@@ -882,14 +908,14 @@ class Actifio:
     mountimage_args.__setitem__('restoreoption', {'provisioningoptions': provisioningoptions})
 
     try:
-      target_host = self.get_hosts(hostname=target_hostname)[0]
+      target_host = self.get_hosts(hostname=target_hostname)
     except:
       raise
 
     if len(target_host) != 1:
       raise ActUserError("Unable to find the specified 'target_hostname': " + target_hostname)
 
-    mountimage_args.__setitem__('host', target_host.id)
+    mountimage_args.__setitem__('host', target_host[0].id)
 
     # get the image by recovery time
 
@@ -917,7 +943,7 @@ class Actifio:
       mountimage_args.__setitem__('nowait', None)
 
     # mountimage steps
-    # print (mountimage_args)
+    print (mountimage_args)
     mountimage_out = self.run_uds_command("task", "mountimage", mountimage_args)
 
     result_job_name = mountimage_out['result'].split(" ")[0]
