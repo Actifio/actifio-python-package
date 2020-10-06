@@ -1,6 +1,4 @@
 import sys
-if sys.version [:3] == "2.7":
-  import exceptions
 
 class ActException (Exception):
   def __init__(self, message, code):
@@ -10,28 +8,26 @@ class ActException (Exception):
 
 # this is still supported in 3.8
   def __str__(self):
-    if self.error_code != "":
+    if self.error_code is not None:
       return "[" + str(self.error_code) + "] " + self.message
     else:
       return self.message
 
 class ActLoginError(ActException):
-  def __init__(self, msg):
-    super().__init__("Actifio Login Exception: " + str(msg),None)
-
+  def __init__(self, message):
+    super().__init__("Actifio Login Exception: " + str(message), None)
 
 class ActConnectError (ActException):
-  def __init__(self, msg):
-    super().__init__("Actifio Connection Error: " + str(msg),None)
+  def __init__(self, message):
+    super().__init__("Actifio Connection Error: " + str(message), None)
 
 class ActAPIError (ActException):
-  def __init__(self, msg, error_code):
-    super().__init__("Actifio API Error: " + str(msg),error_code)
+  def __init__(self, message, error_code):
+    super().__init__("Actifio API Error: " + str(message), error_code)
 
 class ActUserError (ActException):
-  def __init__(self, msg):
-    super().__init__( "Actifio User Error: " + str(msg),None)
-    
+  def __init__(self, message):
+    super().__init__( "Actifio User Error: " + str(message), None)
 
 class ActVersionError (ActException):
   def __init__(self, object_name, min_version):

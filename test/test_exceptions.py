@@ -1,11 +1,13 @@
 import unittest
 import os
 import sys
-sys.path.insert(0, os.path.abspath('.'))
+# sys.path.insert(0, os.path.abspath('.'))
 sys.path.insert(0, os.path.abspath('..'))
 
 from Actifio import Actifio 
 from Actifio.actexceptions import *
+
+print(sys.modules[ActAPIError.__module__].__file__)
 
 appliance = os.environ['APPLIANCE']
 user = os.environ['ACTUSER']
@@ -44,25 +46,25 @@ class ExceptionTesting(unittest.TestCase):
     with self.assertRaises(ActLoginError) as excp:
       act = Actifio(agm, user, password)
       act.run_uds_command('info', 'lsversion', {})
-    self.assertEqual(excp.exception.msg, "This does not seem to be a Actifio Sky/CDS appliance")
+    self.assertEqual(str(excp.exception), "Actifio Login Exception: This does not seem to be a Actifio Sky/CDS appliance")
 
   def test_missing_user_token (self):
     with self.assertRaises(ActLoginError) as excp:
       act = Actifio(appliance, wrong_user, password)
       act.run_uds_command('info', 'lsversion', {})
-    self.assertEqual(excp.exception.msg, "Invalid username or password")
+    self.assertEqual(str(excp.exception), "Actifio Login Exception: Invalid username or password")
 
   def test_wrong_user(self):
     with self.assertRaises(ActLoginError) as excp:
       act = Actifio(appliance, wrong_user, password)
       act.run_uds_command('info', 'lsversion', {})
-    self.assertEqual(excp.exception.msg, "Invalid username or password")
+    self.assertEqual(str(excp.exception), "Actifio Login Exception: Invalid username or password")
 
   def test_wrong_password(self):
     with self.assertRaises(ActLoginError) as excp:
       act = Actifio(appliance, user, wrong_password)
       act.run_uds_command('info', 'lsversion', {})
-    self.assertEqual(excp.exception.msg, "Invalid username or password")
+    self.assertEqual(str(excp.exception), "Actifio Login Exception: Invalid username or password")
 
   def test_incorrect_command(self):
     with self.assertRaises(ActAPIError) as excp:
@@ -87,7 +89,7 @@ class ExceptionTesting(unittest.TestCase):
         restoretime="03-12-2234 00:00:00",
         strict_policy=True 
         )
-    self.assertEqual(excp.exception.msg, "'restoretime' need to be in the format of [YYYY-MM-DD HH:mm:ss]")
+    self.assertEqual(str(excp.exception), "Actifio User Error: 'restoretime' need to be in the format of [YYYY-MM-DD HH:mm:ss]")
 
     # strict_policy with non LogSmart app
     with self.assertRaises(ActUserError) as excp:
@@ -97,7 +99,7 @@ class ExceptionTesting(unittest.TestCase):
         restoretime=datetime.today(),
         strict_policy=True 
         )
-    self.assertEqual(excp.exception.msg, "'strict_policy=True' is only valid for LogSmart enables applications. This application is not LogSmart enabled.")
+    self.assertEqual(str(excp.exception), "Actifio User Error: 'strict_policy=True' is only valid for LogSmart enables applications. This application is not LogSmart enabled.")
 
     # restoretime can't be empty
     with self.assertRaises(ActUserError) as excp:
@@ -107,7 +109,7 @@ class ExceptionTesting(unittest.TestCase):
         restoretime="",
         strict_policy=True 
         )
-    self.assertEqual(excp.exception.msg, "'restoretime' should be in the type of datetime or string with format of [YYYY-MM-DD HH:mm:ss]")
+    self.assertEqual(str(excp.exception), "Actifio User Error: 'restoretime' should be in the type of datetime or string with format of [YYYY-MM-DD HH:mm:ss]")
 
   def test_clone_database_args(self):
     act = Actifio(appliance, user, password)
@@ -128,7 +130,7 @@ class ExceptionTesting(unittest.TestCase):
         ora_home=ora_home,
         ora_dbname=ora_dbname 
         )
-    self.assertEqual(excp.exception.msg, "'restoretime' need to be in the format of [YYYY-MM-DD HH:mm:ss]")
+    self.assertEqual(str(excp.exception), "Actifio User Error: 'restoretime' need to be in the format of [YYYY-MM-DD HH:mm:ss]")
 
     # restoretime can't be empty
     with self.assertRaises(ActUserError) as excp:
@@ -141,7 +143,7 @@ class ExceptionTesting(unittest.TestCase):
         ora_home=ora_home,
         ora_dbname=ora_dbname 
         )
-    self.assertEqual(excp.exception.msg, "'restoretime' should be in the type of datetime or string with format of [YYYY-MM-DD HH:mm:ss]")
+    self.assertEqual(str(excp.exception), "Actifio User Error: 'restoretime' should be in the type of datetime or string with format of [YYYY-MM-DD HH:mm:ss]")
 
     # strict_policy 
     with self.assertRaises(ActUserError) as excp:
@@ -154,7 +156,7 @@ class ExceptionTesting(unittest.TestCase):
         ora_home=ora_home,
         ora_dbname=ora_dbname 
         )
-    self.assertEqual(excp.exception.msg, "'strict_policy' should be boolean")
+    self.assertEqual(str(excp.exception), "Actifio User Error: 'strict_policy' should be boolean")
 
     # source_application need to be specified
     with self.assertRaises(ActUserError) as excp:
@@ -166,7 +168,7 @@ class ExceptionTesting(unittest.TestCase):
         ora_home=ora_home,
         ora_dbname=ora_dbname 
         )
-    self.assertEqual(excp.exception.msg, "'source_application' or 'source_appname' and 'source_hostname' need to be specified.")
+    self.assertEqual(str(excp.exception), "Actifio User Error: 'source_application' or 'source_appname' and 'source_hostname' need to be specified.")
 
     # source_application need to be actApplication 
     with self.assertRaises(ActUserError) as excp:
@@ -179,7 +181,7 @@ class ExceptionTesting(unittest.TestCase):
         ora_home=ora_home,
         ora_dbname=ora_dbname 
         )
-    self.assertEqual(excp.exception.msg, "'source_application' need to be ActApplication type.")
+    self.assertEqual(str(excp.exception), "Actifio User Error: 'source_application' need to be ActApplication type.")
 
     # oracle params
     with self.assertRaises(ActUserError) as excp:
@@ -191,7 +193,7 @@ class ExceptionTesting(unittest.TestCase):
         strict_policy=True,
         oracle_db_name=ora_dbname 
         )
-    self.assertEqual(excp.exception.msg, "Required argument is missing: oracle_home")
+    self.assertEqual(str(excp.exception), "Actifio User Error: Required argument is missing: oracle_home")
 
     # oracle params
     with self.assertRaises(ActUserError) as excp:
@@ -203,7 +205,7 @@ class ExceptionTesting(unittest.TestCase):
         strict_policy=True,
         oracle_home=ora_home
         )
-    self.assertEqual(excp.exception.msg, "Required argument is missing: oracle_db_name")
+    self.assertEqual(str(excp.exception), "Actifio User Error: Required argument is missing: oracle_db_name")
 
     # sql params
     with self.assertRaises(ActUserError) as excp:
@@ -215,7 +217,7 @@ class ExceptionTesting(unittest.TestCase):
         strict_policy=True,
         sql_instance_name=sql_dbinst
         )
-    self.assertEqual(excp.exception.msg, "Required argument is missing: sql_db_name")
+    self.assertEqual(str(excp.exception), "Actifio User Error: Required argument is missing: sql_db_name")
 
 
 if __name__ == "__main__":
