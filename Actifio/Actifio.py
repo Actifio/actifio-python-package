@@ -245,7 +245,8 @@ class Actifio:
   @ActEnforce.needs_token
   def run_uds_command(self, cmdType,
     cmdUDS,
-    cmdArgs={}):
+    cmdArgs={},
+    max_pages=100):
     """
     Wrapper function to convert CLI commands to the rest API.
 
@@ -315,24 +316,33 @@ class Actifio:
         _URI += urlencode_str(key) + '=' + urlencode_str(str(cmdArgs[key])) + '&'
 
     _URI += 'sessionid=' + Actifio._sessionid[self.appliance][self.username]["sessionid"]
-    try:
-      udsout = self._httppool.request (
-        'GET' if cmdType == 'info' else 'POST',
-        _URI
-      )
-      if self._verbose:
-        print(_URI)
-    except Exception as e:
-      # print (e)
-      raise ActConnectError("Failed to connect the appliance")
-    else:
-      response = json.loads(udsout.data)
-      if udsout.status != 200:
-        self._lastout = ''
-        raise ActAPIError(response['errormessage'], response['errorcode'])
+
+    limit = 4096
+    results = {'result': [], 'status': 0}
+    for page in range(0, max_pages):
+      try:
+        udsout = self._httppool.request (
+            'GET' if cmdType == 'info' else 'POST',
+            '%s&apistart=%i&apilimit=%i' % (_URI, page * limit, limit)
+        )
+        if self._verbose:
+          print('%s&apistart=%i&apilimit=%i' % (_URI, page * limit, limit))
+      except Exception as e:
+        # print (e)
+        raise ActConnectError("Failed to connect the appliance")
       else:
-        self._lastout = response
-        return self._lastout
+        response = json.loads(udsout.data)
+        if udsout.status != 200:
+          self._lastout = ''
+          raise ActAPIError(response['errormessage'], response['errorcode'])
+        else:
+          self._lastout = response
+          if 'result' not in response:
+            return self._lastout
+          results['result'].extend(self._lastout['result'])
+          if len(self._lastout['result']) < limit:
+            return results
+    return results
 
   @ActEnforce.needs_token
   def run_sarg_command(self, cmdSARG, cmdArgs={}):
